@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – V3 atmospheric modes</title>
+<title>Okno do dvora – V4 blur states</title>
 
 <style>
 body {
@@ -73,7 +73,7 @@ let index = 0;
 let lastRain = false;
 
 // =========================
-// 🎨 COLOR ENGINE
+// 🌈 COLOR ENGINE
 // =========================
 function getBackgroundColor(t, cloud) {
 
@@ -96,7 +96,7 @@ function getBackgroundColor(t, cloud) {
 }
 
 // =========================
-// 🧪 STATES
+// STATES
 // =========================
 const states = [
     { name: "VEDRO", temp: 35, rain: 0, cloud: 5 },
@@ -111,33 +111,41 @@ const states = [
 ];
 
 // =========================
-// 🌍 VISUAL SYSTEM
+// 🌍 VISUAL SYSTEM (FIX BLUR LOGIC)
 // =========================
 function renderVisual(s) {
 
     const fog = s.cloud / 100;
     const isFullFog = s.cloud >= 95;
 
-    let blurAmount;
-    let fogOpacity;
+    // 🌫️ MLHA (jen extrém)
+    let fogOpacity = isFullFog ? 0.75 : 0.08 + fog * 0.12;
 
-    if (isFullFog) {
-        blurAmount = 6;
-        fogOpacity = 0.75;
-    } else {
-        blurAmount = 1.2;
-        fogOpacity = 0.08 + fog * 0.12;
-    }
-
-    // 🌫️ mlha vrstva
     fogEl.style.background = `rgba(255,255,255,${fogOpacity})`;
 
-    // 🌈 BARVA (FIX HLAVNÍ)
+    // 🌈 BARVA
     document.body.style.background = getBackgroundColor(s.temp, s.cloud);
 
-    // 🌍 atmosféra
+    // 🌫️ HLAVNÍ ATMOSFÉRA BEZ GLOBAL BLUR
+    let blur = 0;
+
+    // 🌧️ déšť = 10%
+    if (s.rain > 0 && s.cloud < 95) {
+        blur = 1.2;
+    }
+
+    // ⛈️ bouře = 15%
+    if (s.name === "BOUŘE") {
+        blur = 2;
+    }
+
+    // 🌫️ mlha override
+    if (isFullFog) {
+        blur = 6;
+    }
+
     worldEl.style.filter = `
-        blur(${blurAmount}px)
+        blur(${blur}px)
         brightness(${1 - fog * 0.25})
         contrast(${1 - fog * 0.15})
     `;
@@ -206,7 +214,7 @@ function drawRain() {
 }
 
 // =========================
-// ❄️ SNOW (minimal)
+// ❄️ SNOW
 // =========================
 function updateSnow(s) {
     snowing = (s.temp <= 0 && s.rain > 0);
