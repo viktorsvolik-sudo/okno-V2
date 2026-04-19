@@ -178,7 +178,7 @@ function getDaylightFactor(hour) {
 }
 
 function applyLightToColor(rgb, daylight) {
-const factor = lerp(0.10, 1, daylight);
+    const factor = lerp(0.10, 1, daylight);
     return [
         Math.round(rgb[0] * factor),
         Math.round(rgb[1] * factor),
@@ -222,16 +222,15 @@ function renderVisual(s) {
 
     document.getElementById("fog").style.background =
         isSnow
-            ? `rgba(255,255,255,${isFullFog ? 0.22 : fog * 0.08})`
-            : `rgba(255,255,255,${isFullFog ? 0.75 : fog * 0.2})`;
+            ? `rgba(255,255,255,${isFullFog ? 0.16 : fog * 0.05})`
+            : `rgba(255,255,255,${isFullFog ? 0.32 : fog * 0.08})`;
 
     document.getElementById("world").style.filter = `
         blur(${blur}px)
-        brightness(${(isSnow ? lerp(0.7, 1.05, daylight) : lerp(0.5, 1, daylight)) - (isSnow ? fog * 0.05 : fog * 0.18)})
-        contrast(${isSnow ? 0.98 : 1 - fog * 0.15})
+        brightness(${(isSnow ? lerp(0.72, 1.05, daylight) : lerp(0.5, 1, daylight)) - (isSnow ? fog * 0.03 : fog * 0.08)})
+        contrast(${isSnow ? 0.99 : 1 - fog * 0.07})
     `;
 }
-
 
 // =====================================================
 // 🌧️ RAIN
