@@ -1,69 +1,3 @@
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<title>Okno do dvora – V3 atmospheric modes</title>
-
-<style>
-body {
-    margin: 0;
-    overflow: hidden;
-}
-
-/* 🌍 SVĚT */
-#world {
-    position: fixed;
-    inset: 0;
-}
-
-/* 🌫️ MLHA VRSTVA */
-#fog {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 2;
-
-    background: rgba(255,255,255,0);
-    transition: background 0.4s ease;
-}
-
-/* 🧠 DEBUG */
-#debug {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    z-index: 9999;
-
-    font-family: monospace;
-    font-size: 13px;
-
-    background: rgba(0,0,0,0.7);
-    color: #fff;
-    padding: 10px;
-    border-radius: 6px;
-
-    white-space: pre-line;
-}
-
-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    pointer-events: none;
-}
-</style>
-</head>
-
-<body>
-
-<div id="world">
-    <canvas id="rain"></canvas>
-    <canvas id="snow"></canvas>
-</div>
-
-<div id="fog"></div>
-<div id="debug"></div>
-
 <script>
 const debugEl = document.getElementById("debug");
 const fogEl = document.getElementById("fog");
@@ -73,7 +7,32 @@ let index = 0;
 let lastRain = false;
 
 // =========================
-// 🧪 STATES
+// 🎨 COLOR ENGINE (NOVÉ)
+// =========================
+function getBackgroundColor(t, cloud) {
+
+    // základ podle teploty
+    let base;
+
+    if (t >= 30) base = [255, 170, 100];     // horko
+    else if (t >= 20) base = [255, 210, 120];
+    else if (t >= 10) base = [180, 210, 255];
+    else if (t > 0) base = [160, 190, 255];
+    else base = [200, 220, 255];
+
+    // mlha zesvětlí + desaturuje
+    const fog = cloud / 100;
+    const mix = fog * 0.6;
+
+    const r = Math.round(base[0] + (255 - base[0]) * mix);
+    const g = Math.round(base[1] + (255 - base[1]) * mix);
+    const b = Math.round(base[2] + (255 - base[2]) * mix);
+
+    return `rgb(${r},${g},${b})`;
+}
+
+// =========================
+// 🌍 STATES
 // =========================
 const states = [
     { name: "VEDRO", temp: 35, rain: 0, cloud: 5 },
@@ -88,30 +47,31 @@ const states = [
 ];
 
 // =========================
-// 🎨 ATMOSPHERE SYSTEM (FIXED)
+// 🎨 VISUAL FIXED
 // =========================
 function renderVisual(s) {
 
     const fog = s.cloud / 100;
-
-    // 🌫️ KLÍČOVÁ LOGIKA MLHY
     const isFullFog = s.cloud >= 95;
 
     let blurAmount;
     let fogOpacity;
 
     if (isFullFog) {
-        // 🌫️ SILNÁ MLHA (jen tady!)
         blurAmount = 6;
         fogOpacity = 0.75;
     } else {
-        // 🌧️ ostatní stavy = minimální blur
         blurAmount = 1.2;
         fogOpacity = 0.08 + fog * 0.12;
     }
 
+    // 🌫️ fog overlay
     fogEl.style.background = `rgba(255,255,255,${fogOpacity})`;
 
+    // 🌍 COLOR (🔥 FIX TADY)
+    document.body.style.background = getBackgroundColor(s.temp, s.cloud);
+
+    // 🌫️ atmosphere
     worldEl.style.filter = `
         blur(${blurAmount}px)
         brightness(${1 - fog * 0.25})
@@ -121,109 +81,3 @@ function renderVisual(s) {
     updateRain(s);
     updateSnow(s);
 }
-
-// =========================
-// 🌧️ RAIN (silný, čitelný)
-// =========================
-const rainCanvas = document.getElementById("rain");
-const ctx = rainCanvas.getContext("2d");
-
-let drops = [];
-let raining = false;
-
-function resize() {
-    rainCanvas.width = innerWidth;
-    rainCanvas.height = innerHeight;
-}
-addEventListener("resize", resize);
-resize();
-
-function initRain() {
-    drops = [];
-
-    for (let i = 0; i < 300; i++) {
-        drops.push({
-            x: Math.random() * rainCanvas.width,
-            y: Math.random() * rainCanvas.height,
-            len: Math.random() * 45 + 25,
-            speed: Math.random() * 8 + 6
-        });
-    }
-}
-
-function updateRain(s) {
-    const state = s.rain >= 0.1;
-
-    if (state && !lastRain) initRain();
-
-    raining = state;
-    lastRain = state;
-}
-
-function drawRain() {
-    ctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
-
-    if (raining) {
-        ctx.strokeStyle = "rgba(255,255,255,1)";
-        ctx.lineWidth = 1.6;
-
-        for (let d of drops) {
-            ctx.beginPath();
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x, d.y + d.len);
-            ctx.stroke();
-
-            d.y += d.speed;
-            if (d.y > rainCanvas.height) d.y = -30;
-        }
-    }
-
-    requestAnimationFrame(drawRain);
-}
-
-// =========================
-// ❄️ SNOW
-// =========================
-const snowCanvas = document.getElementById("snow");
-const snowCtx = snowCanvas.getContext("2d");
-
-let snowflakes = [];
-let snowing = false;
-
-function updateSnow(s) {
-    snowing = (s.temp <= 0 && s.rain > 0);
-}
-
-// =========================
-// RENDER
-// =========================
-function render() {
-    const s = states[index];
-
-    renderVisual(s);
-
-    debugEl.textContent =
-`${s.name}
-TEMP: ${s.temp}
-RAIN: ${s.rain}
-CLOUD: ${s.cloud}`;
-}
-
-// =========================
-// CONTROL
-// =========================
-addEventListener("keydown", e => {
-    if (e.key === "ArrowRight") index = (index + 1) % states.length;
-    if (e.key === "ArrowLeft") index = (index - 1 + states.length) % states.length;
-    render();
-});
-
-// =========================
-// START
-// =========================
-render();
-drawRain();
-</script>
-
-</body>
-</html>
