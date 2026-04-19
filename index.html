@@ -82,7 +82,7 @@ const testStates = [
     { name:"MLHA", temp:4, rain:0, cloud:98, wind:0, hour:5 },
     { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
     { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1, hour:21 },
-    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3, hour:7 }
+    { name:"SNÍH", temp:-3, rain:0.7, cloud:100, wind:-0.3, hour:9 }
 ];
 
 let testIndex = 0;
@@ -192,11 +192,13 @@ const factor = lerp(0.10, 1, daylight);
 function renderVisual(s) {
     const fog = s.cloud / 100;
     const isFullFog = s.cloud >= 95;
+    const isSnow = s.name === "SNÍH" || s.temp <= 0;
 
     let blur = 0;
     if (s.rain > 0 && !isFullFog) blur = 0.6;
     if (s.name === "BOUŘE") blur = 1;
     if (isFullFog) blur = 6;
+    if (isSnow) blur = Math.max(blur, 1.2);
 
     const hour = MODE === "TEST"
         ? (s.hour ?? 12)
@@ -204,18 +206,29 @@ function renderVisual(s) {
 
     const daylight = getDaylightFactor(hour);
 
-    const baseColor = getBackgroundColor(s.temp, s.cloud);
+    let baseColor = getBackgroundColor(s.temp, s.cloud);
+
+    if (isSnow) {
+        baseColor = [
+            Math.min(baseColor[0] + 20, 255),
+            Math.min(baseColor[1] + 25, 255),
+            Math.min(baseColor[2] + 35, 255)
+        ];
+    }
+
     const finalColor = applyLightToColor(baseColor, daylight);
 
     document.body.style.background = rgbArrayToString(finalColor);
 
     document.getElementById("fog").style.background =
-        `rgba(255,255,255,${isFullFog ? 0.75 : fog * 0.2})`;
+        isSnow
+            ? `rgba(255,255,255,${isFullFog ? 0.82 : 0.22 + fog * 0.22})`
+            : `rgba(255,255,255,${isFullFog ? 0.75 : fog * 0.2})`;
 
     document.getElementById("world").style.filter = `
         blur(${blur}px)
-        brightness(${lerp(0.72, 1, daylight) - fog * 0.18})
-        contrast(${1 - fog * 0.15})
+        brightness(${(isSnow ? lerp(0.65, 1.08, daylight) : lerp(0.5, 1, daylight)) - fog * 0.18})
+        contrast(${isSnow ? 0.92 : 1 - fog * 0.15})
     `;
 }
 
