@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – V2 atmosphere</title>
+<title>Okno do dvora – V3 atmospheric modes</title>
 
 <style>
 body {
@@ -13,23 +13,18 @@ body {
 /* 🌍 SVĚT */
 #world {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
 }
 
-/* 🌫️ MLHA VRSTVA (NOVÁ) */
+/* 🌫️ MLHA VRSTVA */
 #fog {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     pointer-events: none;
     z-index: 2;
+
     background: rgba(255,255,255,0);
-    transition: background 0.5s ease;
+    transition: background 0.4s ease;
 }
 
 /* 🧠 DEBUG */
@@ -42,7 +37,7 @@ body {
     font-family: monospace;
     font-size: 13px;
 
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.7);
     color: #fff;
     padding: 10px;
     border-radius: 6px;
@@ -74,113 +69,112 @@ const debugEl = document.getElementById("debug");
 const fogEl = document.getElementById("fog");
 const worldEl = document.getElementById("world");
 
-let testIndex = 0;
-let lastRainState = false;
+let index = 0;
+let lastRain = false;
 
 // =========================
 // 🧪 STATES
 // =========================
-const testStates = [
-    { name: "VEDRO", hour: 14, temperature: 35, precipitation: 0, cloud: 5 },
-    { name: "JASNO", hour: 13, temperature: 28, precipitation: 0, cloud: 10 },
-    { name: "POLOJASNO", hour: 15, temperature: 22, precipitation: 0, cloud: 40 },
-    { name: "OBLAČNO", hour: 12, temperature: 16, precipitation: 0, cloud: 75 },
-    { name: "MLHA", hour: 7, temperature: 4, precipitation: 0, cloud: 98 },
-    { name: "DÉŠŤ", hour: 11, temperature: 14, precipitation: 0.3, cloud: 85 },
-    { name: "SILNÝ DÉŠŤ", hour: 18, temperature: 17, precipitation: 3, cloud: 95 },
-    { name: "BOUŘE", hour: 19, temperature: 19, precipitation: 6, cloud: 100 },
-    { name: "SNÍH", hour: 2, temperature: -1, precipitation: 0.5, cloud: 90 }
+const states = [
+    { name: "VEDRO", temp: 35, rain: 0, cloud: 5 },
+    { name: "JASNO", temp: 28, rain: 0, cloud: 10 },
+    { name: "DEN", temp: 22, rain: 0, cloud: 40 },
+    { name: "OBLAČNO", temp: 16, rain: 0, cloud: 75 },
+    { name: "MLHA", temp: 4, rain: 0, cloud: 98 },
+    { name: "DÉŠŤ", temp: 14, rain: 0.5, cloud: 85 },
+    { name: "SILNÝ DÉŠŤ", temp: 17, rain: 3, cloud: 95 },
+    { name: "BOUŘE", temp: 19, rain: 6, cloud: 100 },
+    { name: "SNÍH", temp: -1, rain: 0.5, cloud: 90 }
 ];
 
 // =========================
-// 🎨 VISUAL
+// 🎨 ATMOSPHERE SYSTEM (FIXED)
 // =========================
-function updateVisuals(w) {
+function renderVisual(s) {
 
-    const t = w.temperature;
-    const c = w.cloud;
+    const fog = s.cloud / 100;
 
-    // 🌡️ barva
-    let bg =
-        t >= 30 ? "#ffb36b" :
-        t >= 20 ? "#ffd27a" :
-        t >= 10 ? "#cfe3ff" :
-        t > 0 ? "#bcd3ff" : "#e6f0ff";
+    // 🌫️ KLÍČOVÁ LOGIKA MLHY
+    const isFullFog = s.cloud >= 95;
 
-    document.body.style.background = bg;
+    let blurAmount;
+    let fogOpacity;
 
-    // 🌫️ VÝRAZNÁ MLHA (NOVĚ)
-    const fog = c / 100;
+    if (isFullFog) {
+        // 🌫️ SILNÁ MLHA (jen tady!)
+        blurAmount = 6;
+        fogOpacity = 0.75;
+    } else {
+        // 🌧️ ostatní stavy = minimální blur
+        blurAmount = 1.2;
+        fogOpacity = 0.08 + fog * 0.12;
+    }
 
-    // blur + světelný útlum
+    fogEl.style.background = `rgba(255,255,255,${fogOpacity})`;
+
     worldEl.style.filter = `
-        blur(${fog * 5}px)
-        brightness(${1 - fog * 0.35})
-        contrast(${1 - fog * 0.2})
+        blur(${blurAmount}px)
+        brightness(${1 - fog * 0.25})
+        contrast(${1 - fog * 0.15})
     `;
 
-    // extra mlžná vrstva (dŮLEŽITÉ)
-    fogEl.style.background = `rgba(255,255,255,${fog * 0.55})`;
-
-    updateRain(w);
-    updateSnow(w);
+    updateRain(s);
+    updateSnow(s);
 }
 
 // =========================
-// 🌧️ RAIN (VÝRAZNĚJŠÍ)
+// 🌧️ RAIN (silný, čitelný)
 // =========================
 const rainCanvas = document.getElementById("rain");
-const rainCtx = rainCanvas.getContext("2d");
+const ctx = rainCanvas.getContext("2d");
 
 let drops = [];
 let raining = false;
 
 function resize() {
-    rainCanvas.width = window.innerWidth;
-    rainCanvas.height = window.innerHeight;
+    rainCanvas.width = innerWidth;
+    rainCanvas.height = innerHeight;
 }
-window.addEventListener("resize", resize);
+addEventListener("resize", resize);
 resize();
 
 function initRain() {
     drops = [];
 
-    // 🔥 více kapek
-    for (let i = 0; i < 220; i++) {
+    for (let i = 0; i < 300; i++) {
         drops.push({
             x: Math.random() * rainCanvas.width,
             y: Math.random() * rainCanvas.height,
-            len: Math.random() * 30 + 20,   // delší kapky
-            speed: Math.random() * 6 + 5
+            len: Math.random() * 45 + 25,
+            speed: Math.random() * 8 + 6
         });
     }
 }
 
-function updateRain(w) {
-    const state = w.precipitation >= 0.1;
+function updateRain(s) {
+    const state = s.rain >= 0.1;
 
-    if (state && !lastRainState) initRain();
+    if (state && !lastRain) initRain();
 
     raining = state;
-    lastRainState = state;
+    lastRain = state;
 }
 
 function drawRain() {
-    rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+    ctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rainCtx.strokeStyle = "rgba(255,255,255,0.9)"; // 🔥 výraznější
+        ctx.strokeStyle = "rgba(255,255,255,1)";
+        ctx.lineWidth = 1.6;
 
         for (let d of drops) {
-            rainCtx.lineWidth = 1.2;
-
-            rainCtx.beginPath();
-            rainCtx.moveTo(d.x, d.y);
-            rainCtx.lineTo(d.x, d.y + d.len);
-            rainCtx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x, d.y + d.len);
+            ctx.stroke();
 
             d.y += d.speed;
-            if (d.y > rainCanvas.height) d.y = -20;
+            if (d.y > rainCanvas.height) d.y = -30;
         }
     }
 
@@ -188,58 +182,39 @@ function drawRain() {
 }
 
 // =========================
-// ❄️ SNOW (stejné, lehce zesílené)
-function updateSnow(w) {
-    snowing = (w.temperature <= 0 && w.precipitation > 0);
-}
-
-// (zkráceno – zůstává tvoje verze)
+// ❄️ SNOW
+// =========================
 const snowCanvas = document.getElementById("snow");
 const snowCtx = snowCanvas.getContext("2d");
 
 let snowflakes = [];
 let snowing = false;
 
-function drawSnow() {
-    snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-
-    if (snowing) {
-        snowCtx.fillStyle = "#fff";
-
-        for (let f of snowflakes) {
-            snowCtx.beginPath();
-            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-            snowCtx.fill();
-
-            f.y += f.speed;
-            if (f.y > snowCanvas.height) f.y = -5;
-        }
-    }
-
-    requestAnimationFrame(drawSnow);
+function updateSnow(s) {
+    snowing = (s.temp <= 0 && s.rain > 0);
 }
 
 // =========================
 // RENDER
 // =========================
 function render() {
-    const w = testStates[testIndex];
+    const s = states[index];
 
-    updateVisuals(w);
+    renderVisual(s);
 
     debugEl.textContent =
-`STATE: ${w.name}
-TEMP: ${w.temperature}
-PRECIP: ${w.precipitation}
-CLOUD: ${w.cloud}`;
+`${s.name}
+TEMP: ${s.temp}
+RAIN: ${s.rain}
+CLOUD: ${s.cloud}`;
 }
 
 // =========================
 // CONTROL
 // =========================
-document.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight") testIndex = (testIndex + 1) % testStates.length;
-    if (e.key === "ArrowLeft") testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+addEventListener("keydown", e => {
+    if (e.key === "ArrowRight") index = (index + 1) % states.length;
+    if (e.key === "ArrowLeft") index = (index - 1 + states.length) % states.length;
     render();
 });
 
@@ -248,7 +223,6 @@ document.addEventListener("keydown", (e) => {
 // =========================
 render();
 drawRain();
-drawSnow();
 </script>
 
 </body>
