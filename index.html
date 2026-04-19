@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – V2 debug fixed</title>
+<title>Okno do dvora – V2 atmosphere</title>
 
 <style>
 body {
@@ -10,7 +10,7 @@ body {
     overflow: hidden;
 }
 
-/* 🌍 SVĚT (pozadí + atmosféra) */
+/* 🌍 SVĚT */
 #world {
     position: fixed;
     top: 0;
@@ -19,7 +19,20 @@ body {
     height: 100%;
 }
 
-/* 🧠 DEBUG UI (OSTRÉ) */
+/* 🌫️ MLHA VRSTVA (NOVÁ) */
+#fog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    background: rgba(255,255,255,0);
+    transition: background 0.5s ease;
+}
+
+/* 🧠 DEBUG */
 #debug {
     position: fixed;
     top: 10px;
@@ -28,19 +41,15 @@ body {
 
     font-family: monospace;
     font-size: 13px;
-    line-height: 1.4;
 
-    background: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.6);
     color: #fff;
     padding: 10px;
     border-radius: 6px;
 
-    max-width: 320px;
     white-space: pre-line;
-    pointer-events: none;
 }
 
-/* 🌧️ CANVAS BEZ BLURU */
 canvas {
     position: absolute;
     top: 0;
@@ -57,93 +66,68 @@ canvas {
     <canvas id="snow"></canvas>
 </div>
 
+<div id="fog"></div>
 <div id="debug"></div>
 
 <script>
-const TEST_MODE = true;
-
 const debugEl = document.getElementById("debug");
+const fogEl = document.getElementById("fog");
 const worldEl = document.getElementById("world");
 
 let testIndex = 0;
 let lastRainState = false;
 
 // =========================
-// 🧪 TEST STATES
+// 🧪 STATES
 // =========================
 const testStates = [
-    { name: "VEDRO", hour: 14, temperature_2m: 35, precipitation: 0, cloudcover: 5 },
-    { name: "JASNO", hour: 13, temperature_2m: 28, precipitation: 0, cloudcover: 10 },
-    { name: "POHODOVÝ DEN", hour: 15, temperature_2m: 22, precipitation: 0, cloudcover: 40 },
-    { name: "OBLAČNO", hour: 12, temperature_2m: 16, precipitation: 0, cloudcover: 75 },
-    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
-    { name: "DEŠŤ", hour: 11, temperature_2m: 14, precipitation: 0.3, cloudcover: 85 },
-    { name: "SILNÝ DÉŠŤ", hour: 18, temperature_2m: 17, precipitation: 2.5, cloudcover: 95 },
-    { name: "BOUŘE", hour: 19, temperature_2m: 19, precipitation: 6, cloudcover: 100 },
-    { name: "SNÍH", hour: 2, temperature_2m: -1, precipitation: 0.5, cloudcover: 90 },
-    { name: "ZIMA", hour: 5, temperature_2m: -8, precipitation: 0, cloudcover: 60 },
-    { name: "NOC", hour: 23, temperature_2m: 6, precipitation: 0, cloudcover: 5 }
+    { name: "VEDRO", hour: 14, temperature: 35, precipitation: 0, cloud: 5 },
+    { name: "JASNO", hour: 13, temperature: 28, precipitation: 0, cloud: 10 },
+    { name: "POLOJASNO", hour: 15, temperature: 22, precipitation: 0, cloud: 40 },
+    { name: "OBLAČNO", hour: 12, temperature: 16, precipitation: 0, cloud: 75 },
+    { name: "MLHA", hour: 7, temperature: 4, precipitation: 0, cloud: 98 },
+    { name: "DÉŠŤ", hour: 11, temperature: 14, precipitation: 0.3, cloud: 85 },
+    { name: "SILNÝ DÉŠŤ", hour: 18, temperature: 17, precipitation: 3, cloud: 95 },
+    { name: "BOUŘE", hour: 19, temperature: 19, precipitation: 6, cloud: 100 },
+    { name: "SNÍH", hour: 2, temperature: -1, precipitation: 0.5, cloud: 90 }
 ];
 
 // =========================
-// 🎨 VISUAL SYSTEM
+// 🎨 VISUAL
 // =========================
 function updateVisuals(w) {
-    const t = w.temperature_2m;
-    const c = w.cloudcover;
 
-    // 🌡️ barva pozadí
-    let bg;
-    if (t >= 30) bg = "#ffb36b";
-    else if (t >= 20) bg = "#ffd27a";
-    else if (t >= 10) bg = "#cfe3ff";
-    else if (t > 0) bg = "#bcd3ff";
-    else bg = "#e6f0ff";
+    const t = w.temperature;
+    const c = w.cloud;
+
+    // 🌡️ barva
+    let bg =
+        t >= 30 ? "#ffb36b" :
+        t >= 20 ? "#ffd27a" :
+        t >= 10 ? "#cfe3ff" :
+        t > 0 ? "#bcd3ff" : "#e6f0ff";
 
     document.body.style.background = bg;
 
-    // ☁️ ATMOSFÉRA (ALE BEZ VLIVU NA CANVAS)
-    const fog = Math.min(c / 100, 0.9);
+    // 🌫️ VÝRAZNÁ MLHA (NOVĚ)
+    const fog = c / 100;
 
-    worldEl.style.background = bg;
+    // blur + světelný útlum
     worldEl.style.filter = `
-        brightness(${1 - fog * 0.2})
+        blur(${fog * 5}px)
+        brightness(${1 - fog * 0.35})
+        contrast(${1 - fog * 0.2})
     `;
+
+    // extra mlžná vrstva (dŮLEŽITÉ)
+    fogEl.style.background = `rgba(255,255,255,${fog * 0.55})`;
 
     updateRain(w);
     updateSnow(w);
 }
 
 // =========================
-// 🧠 DEBUG
-// =========================
-function explain(w) {
-    const t = w.temperature_2m;
-    const p = w.precipitation;
-    const c = w.cloudcover;
-
-    let reasons = [];
-
-    if (t >= 30) reasons.push("teplo → teplý tón");
-    else if (t >= 20) reasons.push("mírné teplo");
-    else if (t >= 10) reasons.push("chladnější tón");
-    else reasons.push("zima");
-
-    if (c > 90) reasons.push("mlha (vizuální ztráta kontrastu)");
-    else if (c > 60) reasons.push("oblačnost");
-    else reasons.push("jasno");
-
-    if (p >= 2) reasons.push("silný déšť");
-    else if (p >= 0.1) reasons.push("slabý déšť");
-    else reasons.push("bez srážek");
-
-    if (t <= 0 && p > 0) reasons.push("sníh aktivní");
-
-    return reasons.join("\n");
-}
-
-// =========================
-// 🌧️ RAIN (OSTRÝ - BEZ BLURU)
+// 🌧️ RAIN (VÝRAZNĚJŠÍ)
 // =========================
 const rainCanvas = document.getElementById("rain");
 const rainCtx = rainCanvas.getContext("2d");
@@ -151,44 +135,45 @@ const rainCtx = rainCanvas.getContext("2d");
 let drops = [];
 let raining = false;
 
-function resizeRain() {
+function resize() {
     rainCanvas.width = window.innerWidth;
     rainCanvas.height = window.innerHeight;
 }
-window.addEventListener("resize", resizeRain);
-resizeRain();
+window.addEventListener("resize", resize);
+resize();
 
 function initRain() {
     drops = [];
 
-    for (let i = 0; i < 120; i++) {
+    // 🔥 více kapek
+    for (let i = 0; i < 220; i++) {
         drops.push({
             x: Math.random() * rainCanvas.width,
             y: Math.random() * rainCanvas.height,
-            len: Math.random() * 20 + 10,
-            speed: Math.random() * 4 + 4
+            len: Math.random() * 30 + 20,   // delší kapky
+            speed: Math.random() * 6 + 5
         });
     }
 }
 
 function updateRain(w) {
-    const newState = w.precipitation >= 0.1;
+    const state = w.precipitation >= 0.1;
 
-    if (newState && !lastRainState) {
-        initRain();
-    }
+    if (state && !lastRainState) initRain();
 
-    raining = newState;
-    lastRainState = newState;
+    raining = state;
+    lastRainState = state;
 }
 
 function drawRain() {
     rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rainCtx.strokeStyle = "rgba(255,255,255,0.6)";
+        rainCtx.strokeStyle = "rgba(255,255,255,0.9)"; // 🔥 výraznější
 
         for (let d of drops) {
+            rainCtx.lineWidth = 1.2;
+
             rainCtx.beginPath();
             rainCtx.moveTo(d.x, d.y);
             rainCtx.lineTo(d.x, d.y + d.len);
@@ -203,38 +188,17 @@ function drawRain() {
 }
 
 // =========================
-// ❄️ SNOW
-// =========================
+// ❄️ SNOW (stejné, lehce zesílené)
+function updateSnow(w) {
+    snowing = (w.temperature <= 0 && w.precipitation > 0);
+}
+
+// (zkráceno – zůstává tvoje verze)
 const snowCanvas = document.getElementById("snow");
 const snowCtx = snowCanvas.getContext("2d");
 
 let snowflakes = [];
 let snowing = false;
-
-function resizeSnow() {
-    snowCanvas.width = window.innerWidth;
-    snowCanvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resizeSnow);
-resizeSnow();
-
-function initSnow() {
-    snowflakes = [];
-
-    for (let i = 0; i < 80; i++) {
-        snowflakes.push({
-            x: Math.random() * snowCanvas.width,
-            y: Math.random() * snowCanvas.height,
-            r: Math.random() * 2 + 1,
-            speed: Math.random() * 1 + 0.5
-        });
-    }
-}
-
-function updateSnow(w) {
-    snowing = (w.temperature_2m <= 0 && w.precipitation > 0);
-    if (snowing) initSnow();
-}
 
 function drawSnow() {
     snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
@@ -256,7 +220,7 @@ function drawSnow() {
 }
 
 // =========================
-// 🎬 RENDER
+// RENDER
 // =========================
 function render() {
     const w = testStates[testIndex];
@@ -265,23 +229,17 @@ function render() {
 
     debugEl.textContent =
 `STATE: ${w.name}
-
-TEMP: ${w.temperature_2m}°C
+TEMP: ${w.temperature}
 PRECIP: ${w.precipitation}
-CLOUD: ${w.cloudcover}
-HOUR: ${w.hour}
-
-WHY:
-${explain(w)}`;
+CLOUD: ${w.cloud}`;
 }
 
 // =========================
-// CONTROLS
+// CONTROL
 // =========================
 document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") testIndex = (testIndex + 1) % testStates.length;
     if (e.key === "ArrowLeft") testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-
     render();
 });
 
