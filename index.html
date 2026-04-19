@@ -40,20 +40,42 @@ let lastWeather = null;
 // 🧪 TEST DATA
 // =========================
 const testStates = [
-    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
-    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
-    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
+    // ☀️ EXTREME HEAT
+    { name: "VEDRO / PRÁZDNÉ MĚSTO", hour: 14, temperature_2m: 35, precipitation: 0, cloudcover: 5 },
 
-    { name: "POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
-    { name: "PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
+    // 🌞 CLEAR SUMMER
+    { name: "JASNO LETO", hour: 13, temperature_2m: 28, precipitation: 0, cloudcover: 10 },
 
-    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
+    // 🌤️ SOFT DAY
+    { name: "POHODOVÝ DEN", hour: 15, temperature_2m: 22, precipitation: 0, cloudcover: 40 },
 
-    { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95 },
+    // 🌥️ HEAVY CLOUDS
+    { name: "TLAK OBLAČNOSTI", hour: 12, temperature_2m: 16, precipitation: 0, cloudcover: 75 },
 
-    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 }
+    // 🌫️ FOG STATE
+    { name: "MLHA / ZTRÁTA KONTRASTU", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
+
+    // 🌧️ LIGHT RAIN
+    { name: "DÉŠŤ - KAPKY", hour: 11, temperature_2m: 14, precipitation: 0.3, cloudcover: 85 },
+
+    // 🌧️ HEAVY RAIN
+    { name: "DÉŠŤ - INTENZIVNÍ", hour: 18, temperature_2m: 17, precipitation: 2.5, cloudcover: 95 },
+
+    // ⛈️ STORM FEEL (vizuální tlak)
+    { name: "BOUŘE / NAPĚTÍ", hour: 19, temperature_2m: 19, precipitation: 6, cloudcover: 100 },
+
+    // ❄️ SNOW LIGHT
+    { name: "PRVNÍ SNÍH", hour: 2, temperature_2m: -1, precipitation: 0.5, cloudcover: 90 },
+
+    // ❄️ DEEP WINTER
+    { name: "TUHÁ ZIMA", hour: 5, temperature_2m: -8, precipitation: 0, cloudcover: 60 },
+
+    // 🌙 CLEAR NIGHT
+    { name: "NOČNÍ KLID", hour: 23, temperature_2m: 6, precipitation: 0, cloudcover: 5 },
+
+    // 🌑 DARK OVERCAST NIGHT
+    { name: "NOČNÍ TLAK", hour: 1, temperature_2m: 3, precipitation: 0, cloudcover: 100 }
 ];
-
 let testIndex = 0;
 
 // =========================
