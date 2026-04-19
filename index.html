@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – TEST / LIVE</title>
+<title>Okno do dvora – Storm System</title>
 
 <style>
 body {
@@ -51,6 +51,7 @@ canvas {
 
 <div id="world">
     <canvas id="rain"></canvas>
+    <canvas id="lightning"></canvas>
 </div>
 
 <div id="fog"></div>
@@ -59,55 +60,55 @@ canvas {
 <script>
 
 // =====================================================
-// ⚙️ CONFIG
+// ⚙️ MODE
 // =====================================================
-const MODE = "LIVE"; 
-// "TEST" | "LIVE"
-
-const LAT = 50.1071;
-const LON = 14.4473;
+const MODE = "TEST";
 
 // =====================================================
-// 🧪 TEST DATA
+// 🧪 TEST DATA (added storm intensity implicit via rain/cloud)
 // =====================================================
 const testStates = [
-    { name:"VEDRO", temp:35, rain:0, cloud:5 },
-    { name:"JASNO", temp:28, rain:0, cloud:10 },
-    { name:"OBLAČNO", temp:16, rain:0, cloud:75 },
-    { name:"MLHA", temp:4, rain:0, cloud:98 },
-    { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85 },
-    { name:"BOUŘE", temp:19, rain:6, cloud:100 },
-    { name:"SNÍH", temp:-1, rain:0.5, cloud:90 }
+    { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0 },
+    { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2 },
+    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5 },
+    { name:"MLHA", temp:4, rain:0, cloud:98, wind:0 },
+    { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8 },
+    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1 },
+    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3 }
 ];
 
 let testIndex = 0;
 
 // =====================================================
-// 🌍 STATE NORMALIZATION (KLÍČ SYSTÉMU)
+// 🌍 NORMALIZE
 // =====================================================
 function normalizeWeather(raw) {
     return {
         name: raw.name || "LIVE",
         temp: raw.temperature_2m ?? raw.temp,
         rain: raw.precipitation ?? raw.rain,
-        cloud: raw.cloudcover ?? raw.cloud
+        cloud: raw.cloudcover ?? raw.cloud,
+        wind: raw.wind ?? 0
     };
 }
 
 // =====================================================
-// 🌐 OPEN METEO
+// 🌐 OPEN METEO (unchanged conceptually)
 // =====================================================
 async function fetchWeather() {
     const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
+        `https://api.open-meteo.com/v1/forecast?latitude=50.1071&longitude=14.4473&current=temperature_2m,precipitation,cloudcover,wind_speed_10m,wind_direction_10m`
     );
     const data = await res.json();
+
+    const wind = Math.sin(data.current.wind_direction_10m * Math.PI / 180);
 
     return normalizeWeather({
         name: "LIVE",
         temperature_2m: data.current.temperature_2m,
         precipitation: data.current.precipitation,
-        cloudcover: data.current.cloudcover
+        cloudcover: data.current.cloudcover,
+        wind
     });
 }
 
@@ -133,7 +134,15 @@ function getBackgroundColor(t, cloud) {
 }
 
 // =====================================================
-// 🌫️ VISUAL SYSTEM
+// 🌙 DARKEN
+// =====================================================
+function darkenColor(rgb, f) {
+    const n = rgb.match(/\d+/g).map(Number);
+    return `rgb(${n[0]*f},${n[1]*f},${n[2]*f})`;
+}
+
+// =====================================================
+// 🌍 VISUAL SYSTEM
 // =====================================================
 function renderVisual(s) {
 
@@ -141,19 +150,17 @@ function renderVisual(s) {
     const isFullFog = s.cloud >= 95;
 
     let blur = 0;
-
-    // 🌧️ déšť 10%
     if (s.rain > 0 && !isFullFog) blur = 0.6;
-
-    // ⛈️ bouře 15%
     if (s.name === "BOUŘE") blur = 1;
-
-    // 🌫️ mlha override
     if (isFullFog) blur = 6;
 
-    document.body.style.background = getBackgroundColor(s.temp, s.cloud);
+    const hour = new Date().getHours();
+    const isNight = (hour >= 20 || hour < 6);
 
-    fog.style = fog; // (placeholder fix)
+    let bg = getBackgroundColor(s.temp, s.cloud);
+    if (isNight) bg = darkenColor(bg, 0.5);
+
+    document.body.style.background = bg;
 
     document.getElementById("fog").style.background =
         `rgba(255,255,255,${isFullFog ? 0.75 : fog*0.2})`;
@@ -166,48 +173,109 @@ function renderVisual(s) {
 }
 
 // =====================================================
-// 🌧️ RAIN (simplified but stable)
+// 🌧️ RAIN
 // =====================================================
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
+const rainCanvas = document.getElementById("rain");
+const rctx = rainCanvas.getContext("2d");
 
 let drops = [];
 let raining = false;
 
 function resize() {
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
+    rainCanvas.width = innerWidth;
+    rainCanvas.height = innerHeight;
 }
 addEventListener("resize", resize);
 resize();
 
 function initRain() {
     drops = [];
-    for (let i=0;i<300;i++){
+    for (let i=0;i<350;i++){
         drops.push({
-            x:Math.random()*canvas.width,
-            y:Math.random()*canvas.height,
+            x:Math.random()*rainCanvas.width,
+            y:Math.random()*rainCanvas.height,
             l:Math.random()*40+20,
             s:Math.random()*8+4
         });
     }
 }
 
+// =====================================================
+// ⚡ LIGHTNING SYSTEM
+// =====================================================
+const lightningCanvas = document.getElementById("lightning");
+const lctx = lightningCanvas.getContext("2d");
+
+function resizeLightning() {
+    lightningCanvas.width = innerWidth;
+    lightningCanvas.height = innerHeight;
+}
+addEventListener("resize", resizeLightning);
+resizeLightning();
+
+let lightningActive = false;
+
+function triggerLightning() {
+
+    lightningActive = true;
+
+    // flash
+    lctx.fillStyle = "rgba(255,255,255,0.9)";
+    lctx.fillRect(0,0,lightningCanvas.width,lightningCanvas.height);
+
+    setTimeout(() => {
+        lctx.clearRect(0,0,lightningCanvas.width,lightningCanvas.height);
+        lightningActive = false;
+    }, 120);
+
+    // second flicker (realistic effect)
+    setTimeout(() => {
+        if (Math.random() > 0.5) {
+            lctx.fillStyle = "rgba(255,255,255,0.6)";
+            lctx.fillRect(0,0,lightningCanvas.width,lightningCanvas.height);
+
+            setTimeout(() => {
+                lctx.clearRect(0,0,lightningCanvas.width,lightningCanvas.height);
+            }, 80);
+        }
+    }, 180);
+}
+
+// =====================================================
+// 🌧️ DRAW RAIN + STORM TRIGGER
+// =====================================================
 function drawRain() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    const wind = currentWeather?.wind || 0;
+    const angle = wind * 8;
+
+    rctx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
 
     if (raining) {
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 1.5;
+        rctx.strokeStyle = "white";
+        rctx.lineWidth = 1.5;
 
         for (let d of drops) {
-            ctx.beginPath();
-            ctx.moveTo(d.x,d.y);
-            ctx.lineTo(d.x,d.y+d.l);
-            ctx.stroke();
+            rctx.beginPath();
+            rctx.moveTo(d.x,d.y);
+            rctx.lineTo(d.x + angle, d.y + d.l);
+            rctx.stroke();
 
             d.y += d.s;
-            if (d.y > canvas.height) d.y = -20;
+            d.x += wind * 2;
+
+            if (d.y > rainCanvas.height) {
+                d.y = -20;
+                d.x = Math.random()*rainCanvas.width;
+            }
+        }
+
+        // ⚡ lightning trigger condition
+        const stormChance =
+            currentWeather.rain > 2 && currentWeather.cloud > 90;
+
+        if (stormChance && Math.random() < 0.01) {
+            triggerLightning();
         }
     }
 
@@ -215,7 +283,7 @@ function drawRain() {
 }
 
 // =====================================================
-// 🎮 DATA SOURCE SWITCH
+// 🎮 DATA LOOP
 // =====================================================
 let currentWeather = null;
 
@@ -223,9 +291,7 @@ async function updateData() {
 
     if (MODE === "TEST") {
         currentWeather = normalizeWeather(testStates[testIndex]);
-    }
-
-    if (MODE === "LIVE") {
+    } else {
         currentWeather = await fetchWeather();
     }
 
@@ -235,12 +301,19 @@ async function updateData() {
 
     renderVisual(currentWeather);
 
-    document.getElementById("debug").textContent =
-`${MODE}
-${currentWeather.name}
+    const debug = document.getElementById("debug");
+
+    if (MODE === "TEST") {
+        debug.style.display = "block";
+        debug.textContent =
+`${currentWeather.name}
 TEMP: ${currentWeather.temp}
 RAIN: ${currentWeather.rain}
-CLOUD: ${currentWeather.cloud}`;
+CLOUD: ${currentWeather.cloud}
+WIND: ${currentWeather.wind}`;
+    } else {
+        debug.style.display = "none";
+    }
 }
 
 // =====================================================
@@ -252,7 +325,6 @@ addEventListener("keydown", e => {
         if (e.key === "ArrowLeft") testIndex--;
 
         testIndex = (testIndex + testStates.length) % testStates.length;
-
         updateData();
     }
 });
