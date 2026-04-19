@@ -68,13 +68,13 @@ const MODE = "TEST";
 // 🧪 TEST DATA (added storm intensity implicit via rain/cloud)
 // =====================================================
 const testStates = [
-    { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0 },
-    { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2 },
-    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5 },
-    { name:"MLHA", temp:4, rain:0, cloud:98, wind:0 },
-    { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8 },
-    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1 },
-    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3 }
+    { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0, hour:15 },
+    { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2, hour:10 },
+    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:17 },
+    { name:"MLHA", temp:4, rain:0, cloud:98, wind:0, hour:5 },
+    { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
+    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1, hour:22 },
+    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3, hour:8 }
 ];
 
 let testIndex = 0;
@@ -88,7 +88,8 @@ function normalizeWeather(raw) {
         temp: raw.temperature_2m ?? raw.temp,
         rain: raw.precipitation ?? raw.rain,
         cloud: raw.cloudcover ?? raw.cloud,
-        wind: raw.wind ?? 0
+        wind: raw.wind ?? 0,
+        hour: raw.hour
     };
 }
 
@@ -108,7 +109,8 @@ async function fetchWeather() {
         temperature_2m: data.current.temperature_2m,
         precipitation: data.current.precipitation,
         cloudcover: data.current.cloudcover,
-        wind
+        wind,
+        hour: new Date().getHours()
     });
 }
 
@@ -154,7 +156,10 @@ function renderVisual(s) {
     if (s.name === "BOUŘE") blur = 1;
     if (isFullFog) blur = 6;
 
-    const hour = new Date().getHours();
+    const hour = MODE === "TEST"
+        ? (s.hour ?? 12)
+        : new Date().getHours();
+
     const isNight = (hour >= 20 || hour < 6);
 
     let bg = getBackgroundColor(s.temp, s.cloud);
@@ -190,12 +195,12 @@ resize();
 
 function initRain() {
     drops = [];
-    for (let i=0;i<350;i++){
+    for (let i = 0; i < 350; i++) {
         drops.push({
-            x:Math.random()*rainCanvas.width,
-            y:Math.random()*rainCanvas.height,
-            l:Math.random()*40+20,
-            s:Math.random()*8+4
+            x: Math.random() * rainCanvas.width,
+            y: Math.random() * rainCanvas.height,
+            l: Math.random() * 40 + 20,
+            s: Math.random() * 8 + 4
         });
     }
 }
@@ -219,23 +224,21 @@ function triggerLightning() {
 
     lightningActive = true;
 
-    // flash
     lctx.fillStyle = "rgba(255,255,255,0.9)";
-    lctx.fillRect(0,0,lightningCanvas.width,lightningCanvas.height);
+    lctx.fillRect(0, 0, lightningCanvas.width, lightningCanvas.height);
 
     setTimeout(() => {
-        lctx.clearRect(0,0,lightningCanvas.width,lightningCanvas.height);
+        lctx.clearRect(0, 0, lightningCanvas.width, lightningCanvas.height);
         lightningActive = false;
     }, 120);
 
-    // second flicker (realistic effect)
     setTimeout(() => {
         if (Math.random() > 0.5) {
             lctx.fillStyle = "rgba(255,255,255,0.6)";
-            lctx.fillRect(0,0,lightningCanvas.width,lightningCanvas.height);
+            lctx.fillRect(0, 0, lightningCanvas.width, lightningCanvas.height);
 
             setTimeout(() => {
-                lctx.clearRect(0,0,lightningCanvas.width,lightningCanvas.height);
+                lctx.clearRect(0, 0, lightningCanvas.width, lightningCanvas.height);
             }, 80);
         }
     }, 180);
@@ -249,7 +252,7 @@ function drawRain() {
     const wind = currentWeather?.wind || 0;
     const angle = wind * 8;
 
-    rctx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
+    rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
         rctx.strokeStyle = "white";
@@ -257,7 +260,7 @@ function drawRain() {
 
         for (let d of drops) {
             rctx.beginPath();
-            rctx.moveTo(d.x,d.y);
+            rctx.moveTo(d.x, d.y);
             rctx.lineTo(d.x + angle, d.y + d.l);
             rctx.stroke();
 
@@ -266,11 +269,10 @@ function drawRain() {
 
             if (d.y > rainCanvas.height) {
                 d.y = -20;
-                d.x = Math.random()*rainCanvas.width;
+                d.x = Math.random() * rainCanvas.width;
             }
         }
 
-        // ⚡ lightning trigger condition
         const stormChance =
             currentWeather.rain > 2 && currentWeather.cloud > 90;
 
@@ -310,7 +312,8 @@ async function updateData() {
 TEMP: ${currentWeather.temp}
 RAIN: ${currentWeather.rain}
 CLOUD: ${currentWeather.cloud}
-WIND: ${currentWeather.wind}`;
+WIND: ${currentWeather.wind}
+HOUR: ${currentWeather.hour ?? 12}`;
     } else {
         debug.style.display = "none";
     }
