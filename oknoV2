@@ -1,2 +1,287 @@
-git clone https://github.com/viktorsvolik-sudo/okno.git
-cd okno
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Okno do dvora – V2</title>
+
+<style>
+body {
+    margin: 0;
+    background: #f5f5f5;
+    overflow: hidden;
+    transition: background 2s ease, filter 2s ease;
+}
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="rain"></canvas>
+<canvas id="snow"></canvas>
+
+<script>
+const LAT = 50.107109;
+const LON = 14.447331;
+
+const FETCH_INTERVAL = 50000;
+const TEST_MODE = true;
+
+let liveWeather = null;
+let lastWeather = null;
+
+// =========================
+// 🧪 TEST DATA
+// =========================
+const testStates = [
+    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
+    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
+    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
+
+    { name: "POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
+    { name: "PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
+
+    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
+
+    { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95 },
+
+    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 }
+];
+
+let testIndex = 0;
+
+// =========================
+// WEATHER
+// =========================
+async function getWeather() {
+    try {
+        const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
+        );
+        const data = await res.json();
+        liveWeather = data.current;
+    } catch (e) {
+        console.log("fetch error", e);
+    }
+}
+
+// =========================
+// 🌗 DAY / NIGHT
+// =========================
+function updateDayNight(hour) {
+    const isDay = hour >= 6 && hour < 20;
+
+    document.body.style.filter += isDay
+        ? " brightness(1)"
+        : " brightness(0.4)";
+}
+
+// =========================
+// 🎨 VISUAL LOGIC
+// =========================
+function updateVisuals(w) {
+    const t = w.temperature_2m;
+    const c = w.cloudcover;
+
+    // 🌡️ teplota → barva
+    let bg;
+
+    if (t >= 28) bg = "#ffb36b";
+    else if (t >= 20) bg = "#ffd27a";
+    else if (t >= 12) bg = "#d6e6ff";
+    else if (t >= 5) bg = "#bcd3ff";
+    else if (t > 0) bg = "#aabfff";
+    else bg = "#dfe9ff";
+
+    document.body.style.background = bg;
+
+    // ☁️ oblačnost → mlha
+    const fog = Math.min(c / 100, 0.8);
+    document.body.style.filter = `blur(${fog * 3}px) brightness(${1 - fog * 0.3})`;
+
+    updateRain(w);
+    updateSnow(w);
+}
+
+// =========================
+// 🌧️ RAIN
+// =========================
+const rainCanvas = document.getElementById("rain");
+const rainCtx = rainCanvas.getContext("2d");
+
+let drops = [];
+let raining = false;
+
+function resizeRain() {
+    rainCanvas.width = window.innerWidth;
+    rainCanvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeRain);
+resizeRain();
+
+function initRain() {
+    if (drops.length > 0) return;
+
+    for (let i = 0; i < 120; i++) {
+        drops.push({
+            x: Math.random() * rainCanvas.width,
+            y: Math.random() * rainCanvas.height,
+            length: Math.random() * 20 + 10,
+            speed: Math.random() * 4 + 4
+        });
+    }
+}
+
+function updateRain(w) {
+    raining = w.precipitation >= 0.1;
+    if (raining) initRain();
+}
+
+function drawRain() {
+    rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
+
+    if (raining) {
+        rainCtx.strokeStyle = "#aaa";
+
+        for (let d of drops) {
+            rainCtx.beginPath();
+            rainCtx.moveTo(d.x, d.y);
+            rainCtx.lineTo(d.x + 2, d.y + d.length);
+            rainCtx.stroke();
+
+            d.y += d.speed;
+            if (d.y > rainCanvas.height) d.y = -20;
+        }
+    }
+
+    requestAnimationFrame(drawRain);
+}
+
+// =========================
+// ❄️ SNOW
+// =========================
+const snowCanvas = document.getElementById("snow");
+const snowCtx = snowCanvas.getContext("2d");
+
+let snowflakes = [];
+let snowing = false;
+
+function resizeSnow() {
+    snowCanvas.width = window.innerWidth;
+    snowCanvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeSnow);
+resizeSnow();
+
+function initSnow() {
+    if (snowflakes.length > 0) return;
+
+    for (let i = 0; i < 80; i++) {
+        snowflakes.push({
+            x: Math.random() * snowCanvas.width,
+            y: Math.random() * snowCanvas.height,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1 + 0.5
+        });
+    }
+}
+
+function updateSnow(w) {
+    snowing = (w.temperature_2m <= 0 && w.precipitation > 0);
+    if (snowing) initSnow();
+}
+
+function drawSnow() {
+    snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+
+    if (snowing) {
+        snowCtx.fillStyle = "#ffffff";
+
+        for (let f of snowflakes) {
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fill();
+
+            f.y += f.speed;
+            if (f.y > snowCanvas.height) f.y = -5;
+        }
+    }
+
+    requestAnimationFrame(drawSnow);
+}
+
+// =========================
+// 🎬 RENDER
+// =========================
+function render() {
+    let w;
+    let hour;
+
+    if (TEST_MODE) {
+        w = testStates[testIndex];
+        hour = w.hour;
+    } else {
+        if (!liveWeather) return;
+        w = liveWeather;
+        hour = new Date().getHours();
+    }
+
+    lastWeather = w;
+
+    updateVisuals(w);
+    updateDayNight(hour);
+}
+
+// =========================
+// CONTROLS
+// =========================
+document.addEventListener("keydown", (e) => {
+    if (!TEST_MODE) return;
+
+    if (e.key === "ArrowRight") testIndex = (testIndex + 1) % testStates.length;
+    if (e.key === "ArrowLeft") testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+
+    render();
+});
+
+// swipe
+let startX = 0;
+
+document.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX;
+});
+
+document.addEventListener("touchend", (e) => {
+    if (!TEST_MODE) return;
+
+    let diff = e.changedTouches[0].clientX - startX;
+
+    if (diff > 50) testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+    if (diff < -50) testIndex = (testIndex + 1) % testStates.length;
+
+    render();
+});
+
+// =========================
+// START
+// =========================
+render();
+drawRain();
+drawSnow();
+
+if (!TEST_MODE) {
+    setInterval(async () => {
+        await getWeather();
+        render();
+    }, FETCH_INTERVAL);
+}
+</script>
+
+</body>
+</html>
