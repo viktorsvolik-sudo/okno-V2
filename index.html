@@ -2,14 +2,34 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – V2</title>
+<title>Okno do dvora – V2 debug</title>
 
 <style>
 body {
     margin: 0;
-    background: #f5f5f5;
     overflow: hidden;
     transition: background 2s ease, filter 2s ease;
+}
+
+/* 🌐 DEBUG PANEL */
+#debug {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 9999;
+
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.4;
+
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    padding: 10px;
+    border-radius: 6px;
+
+    max-width: 320px;
+    white-space: pre-line;
+    pointer-events: none;
 }
 
 canvas {
@@ -26,109 +46,94 @@ canvas {
 <canvas id="rain"></canvas>
 <canvas id="snow"></canvas>
 
+<div id="debug"></div>
+
 <script>
 const LAT = 50.107109;
 const LON = 14.447331;
 
-const FETCH_INTERVAL = 50000;
 const TEST_MODE = true;
 
-let liveWeather = null;
-let lastWeather = null;
+const debugEl = document.getElementById("debug");
 
-// =========================
-// 🧪 TEST DATA
-// =========================
-const testStates = [
-    // ☀️ EXTREME HEAT
-    { name: "VEDRO / PRÁZDNÉ MĚSTO", hour: 14, temperature_2m: 35, precipitation: 0, cloudcover: 5 },
-
-    // 🌞 CLEAR SUMMER
-    { name: "JASNO LETO", hour: 13, temperature_2m: 28, precipitation: 0, cloudcover: 10 },
-
-    // 🌤️ SOFT DAY
-    { name: "POHODOVÝ DEN", hour: 15, temperature_2m: 22, precipitation: 0, cloudcover: 40 },
-
-    // 🌥️ HEAVY CLOUDS
-    { name: "TLAK OBLAČNOSTI", hour: 12, temperature_2m: 16, precipitation: 0, cloudcover: 75 },
-
-    // 🌫️ FOG STATE
-    { name: "MLHA / ZTRÁTA KONTRASTU", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
-
-    // 🌧️ LIGHT RAIN
-    { name: "DÉŠŤ - KAPKY", hour: 11, temperature_2m: 14, precipitation: 0.3, cloudcover: 85 },
-
-    // 🌧️ HEAVY RAIN
-    { name: "DÉŠŤ - INTENZIVNÍ", hour: 18, temperature_2m: 17, precipitation: 2.5, cloudcover: 95 },
-
-    // ⛈️ STORM FEEL (vizuální tlak)
-    { name: "BOUŘE / NAPĚTÍ", hour: 19, temperature_2m: 19, precipitation: 6, cloudcover: 100 },
-
-    // ❄️ SNOW LIGHT
-    { name: "PRVNÍ SNÍH", hour: 2, temperature_2m: -1, precipitation: 0.5, cloudcover: 90 },
-
-    // ❄️ DEEP WINTER
-    { name: "TUHÁ ZIMA", hour: 5, temperature_2m: -8, precipitation: 0, cloudcover: 60 },
-
-    // 🌙 CLEAR NIGHT
-    { name: "NOČNÍ KLID", hour: 23, temperature_2m: 6, precipitation: 0, cloudcover: 5 },
-
-    // 🌑 DARK OVERCAST NIGHT
-    { name: "NOČNÍ TLAK", hour: 1, temperature_2m: 3, precipitation: 0, cloudcover: 100 }
-];
 let testIndex = 0;
 
 // =========================
-// WEATHER
+// 🧪 TEST STATES
 // =========================
-async function getWeather() {
-    try {
-        const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
-        );
-        const data = await res.json();
-        liveWeather = data.current;
-    } catch (e) {
-        console.log("fetch error", e);
-    }
-}
-
-// =========================
-// 🌗 DAY / NIGHT
-// =========================
-function updateDayNight(hour) {
-    const isDay = hour >= 6 && hour < 20;
-
-    document.body.style.filter += isDay
-        ? " brightness(1)"
-        : " brightness(0.4)";
-}
+const testStates = [
+    { name: "VEDRO", hour: 14, temperature_2m: 35, precipitation: 0, cloudcover: 5 },
+    { name: "JASNO", hour: 13, temperature_2m: 28, precipitation: 0, cloudcover: 10 },
+    { name: "POHODOVÝ DEN", hour: 15, temperature_2m: 22, precipitation: 0, cloudcover: 40 },
+    { name: "OBLAČNO", hour: 12, temperature_2m: 16, precipitation: 0, cloudcover: 75 },
+    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
+    { name: "DEŠŤ", hour: 11, temperature_2m: 14, precipitation: 0.3, cloudcover: 85 },
+    { name: "SILNÝ DÉŠŤ", hour: 18, temperature_2m: 17, precipitation: 2.5, cloudcover: 95 },
+    { name: "BOUŘE", hour: 19, temperature_2m: 19, precipitation: 6, cloudcover: 100 },
+    { name: "SNÍH", hour: 2, temperature_2m: -1, precipitation: 0.5, cloudcover: 90 },
+    { name: "ZIMA", hour: 5, temperature_2m: -8, precipitation: 0, cloudcover: 60 },
+    { name: "NOC", hour: 23, temperature_2m: 6, precipitation: 0, cloudcover: 5 }
+];
 
 // =========================
 // 🎨 VISUAL LOGIC
 // =========================
 function updateVisuals(w) {
     const t = w.temperature_2m;
+    const p = w.precipitation;
     const c = w.cloudcover;
 
-    // 🌡️ teplota → barva
+    // 🌡️ barva teploty
     let bg;
-
-    if (t >= 28) bg = "#ffb36b";
+    if (t >= 30) bg = "#ffb36b";
     else if (t >= 20) bg = "#ffd27a";
-    else if (t >= 12) bg = "#d6e6ff";
-    else if (t >= 5) bg = "#bcd3ff";
-    else if (t > 0) bg = "#aabfff";
-    else bg = "#dfe9ff";
+    else if (t >= 10) bg = "#cfe3ff";
+    else if (t > 0) bg = "#bcd3ff";
+    else bg = "#e6f0ff";
 
     document.body.style.background = bg;
 
-    // ☁️ oblačnost → mlha
-    const fog = Math.min(c / 100, 0.8);
-    document.body.style.filter = `blur(${fog * 3}px) brightness(${1 - fog * 0.3})`;
+    // ☁️ mlha = blur + kontrast
+    const fog = Math.min(c / 100, 0.9);
+    document.body.style.filter = `
+        blur(${fog * 3}px)
+        brightness(${1 - fog * 0.25})
+    `;
 
     updateRain(w);
     updateSnow(w);
+}
+
+// =========================
+// 🧠 DEBUG EXPLANATION ENGINE
+// =========================
+function explain(w) {
+    const t = w.temperature_2m;
+    const p = w.precipitation;
+    const c = w.cloudcover;
+
+    let reasons = [];
+
+    // teplota
+    if (t >= 30) reasons.push("extrémní teplo → oranžová/teplá barva");
+    else if (t >= 20) reasons.push("teplo → žlutý tón");
+    else if (t >= 10) reasons.push("mírná teplota → studenější modrá");
+    else reasons.push("chlad → modrá/ledový tón");
+
+    // oblačnost
+    if (c > 90) reasons.push("vysoká oblačnost → silný blur (mlha efekt)");
+    else if (c > 60) reasons.push("střední oblačnost → jemný blur");
+    else reasons.push("nízká oblačnost → čistý obraz");
+
+    // srážky
+    if (p >= 2) reasons.push("silný déšť → aktivní rain particle system");
+    else if (p >= 0.1) reasons.push("slabý déšť → lehké částice");
+    else reasons.push("bez srážek → klidná scéna");
+
+    // sníh logika
+    if (t <= 0 && p > 0) reasons.push("teplota ≤ 0 + srážky → snow system aktivní");
+
+    return reasons.join("\n");
 }
 
 // =========================
@@ -148,13 +153,13 @@ window.addEventListener("resize", resizeRain);
 resizeRain();
 
 function initRain() {
-    if (drops.length > 0) return;
+    if (drops.length) return;
 
     for (let i = 0; i < 120; i++) {
         drops.push({
             x: Math.random() * rainCanvas.width,
             y: Math.random() * rainCanvas.height,
-            length: Math.random() * 20 + 10,
+            len: Math.random() * 20 + 10,
             speed: Math.random() * 4 + 4
         });
     }
@@ -169,12 +174,12 @@ function drawRain() {
     rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rainCtx.strokeStyle = "#aaa";
+        rainCtx.strokeStyle = "rgba(255,255,255,0.5)";
 
         for (let d of drops) {
             rainCtx.beginPath();
             rainCtx.moveTo(d.x, d.y);
-            rainCtx.lineTo(d.x + 2, d.y + d.length);
+            rainCtx.lineTo(d.x, d.y + d.len);
             rainCtx.stroke();
 
             d.y += d.speed;
@@ -202,13 +207,13 @@ window.addEventListener("resize", resizeSnow);
 resizeSnow();
 
 function initSnow() {
-    if (snowflakes.length > 0) return;
+    if (snowflakes.length) return;
 
     for (let i = 0; i < 80; i++) {
         snowflakes.push({
             x: Math.random() * snowCanvas.width,
             y: Math.random() * snowCanvas.height,
-            r: Math.random() * 3 + 1,
+            r: Math.random() * 2 + 1,
             speed: Math.random() * 1 + 0.5
         });
     }
@@ -223,7 +228,7 @@ function drawSnow() {
     snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
 
     if (snowing) {
-        snowCtx.fillStyle = "#ffffff";
+        snowCtx.fillStyle = "#fff";
 
         for (let f of snowflakes) {
             snowCtx.beginPath();
@@ -242,50 +247,28 @@ function drawSnow() {
 // 🎬 RENDER
 // =========================
 function render() {
-    let w;
-    let hour;
-
-    if (TEST_MODE) {
-        w = testStates[testIndex];
-        hour = w.hour;
-    } else {
-        if (!liveWeather) return;
-        w = liveWeather;
-        hour = new Date().getHours();
-    }
-
-    lastWeather = w;
+    const w = testStates[testIndex];
 
     updateVisuals(w);
-    updateDayNight(hour);
+
+    debugEl.textContent =
+`STATE: ${w.name}
+
+TEMP: ${w.temperature_2m}°C
+PRECIP: ${w.precipitation}
+CLOUD: ${w.cloudcover}
+HOUR: ${w.hour}
+
+WHY:
+${explain(w)}`;
 }
 
 // =========================
 // CONTROLS
 // =========================
 document.addEventListener("keydown", (e) => {
-    if (!TEST_MODE) return;
-
     if (e.key === "ArrowRight") testIndex = (testIndex + 1) % testStates.length;
     if (e.key === "ArrowLeft") testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-
-    render();
-});
-
-// swipe
-let startX = 0;
-
-document.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX;
-});
-
-document.addEventListener("touchend", (e) => {
-    if (!TEST_MODE) return;
-
-    let diff = e.changedTouches[0].clientX - startX;
-
-    if (diff > 50) testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-    if (diff < -50) testIndex = (testIndex + 1) % testStates.length;
 
     render();
 });
@@ -296,13 +279,6 @@ document.addEventListener("touchend", (e) => {
 render();
 drawRain();
 drawSnow();
-
-if (!TEST_MODE) {
-    setInterval(async () => {
-        await getWeather();
-        render();
-    }, FETCH_INTERVAL);
-}
 </script>
 
 </body>
