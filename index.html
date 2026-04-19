@@ -231,7 +231,7 @@ function renderVisual(s) {
 }
 
 // =====================================================
-// 🌧️ RAIN
+// 🌧️ PRECIPITATION
 // =====================================================
 const rainCanvas = document.getElementById("rain");
 const rctx = rainCanvas.getContext("2d");
@@ -248,19 +248,23 @@ function resize() {
 addEventListener("resize", resize);
 resize();
 
-function createDrop() {
+function createDrop(isSnow = false) {
     return {
         x: Math.random() * (rainCanvas.width + rainSpawnPadding * 2) - rainSpawnPadding,
         y: Math.random() * (rainCanvas.height + rainSpawnPadding * 2) - rainSpawnPadding,
-        l: Math.random() * 40 + 20,
-        s: Math.random() * 8 + 4
+        l: isSnow ? 0 : Math.random() * 40 + 20,
+        s: isSnow ? Math.random() * 1.2 + 0.5 : Math.random() * 8 + 4,
+        r: isSnow ? Math.random() * 2.2 + 1.2 : 0,
+        drift: isSnow ? Math.random() * 0.6 + 0.2 : 0
     };
 }
 
 function initRain() {
+    const isSnow = currentWeather?.name === "SNÍH" || currentWeather?.temp <= 0;
+
     drops = [];
     for (let i = 0; i < 500; i++) {
-        drops.push(createDrop());
+        drops.push(createDrop(isSnow));
     }
 }
 
@@ -303,41 +307,60 @@ function triggerLightning() {
 }
 
 // =====================================================
-// 🌧️ DRAW RAIN + STORM TRIGGER
+// 🌧️ DRAW PRECIPITATION + STORM TRIGGER
 // =====================================================
 function drawRain() {
     const wind = currentWeather?.wind || 0;
     const angle = wind * 8;
+    const isSnow = currentWeather?.name === "SNÍH" || currentWeather?.temp <= 0;
 
     rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rctx.strokeStyle = currentWeather?.name === "DÉŠŤ"
-            ? "rgba(120,140,160,0.95)"
-            : "white";
-        rctx.lineWidth = 1.5;
+        if (isSnow) {
+            rctx.fillStyle = "rgba(235,240,245,0.95)";
+        } else {
+            rctx.strokeStyle = currentWeather?.name === "DÉŠŤ"
+                ? "rgba(120,140,160,0.95)"
+                : "white";
+            rctx.lineWidth = 1.5;
+        }
 
         for (let d of drops) {
-            rctx.beginPath();
-            rctx.moveTo(d.x, d.y);
-            rctx.lineTo(d.x + angle, d.y + d.l);
-            rctx.stroke();
+            if (isSnow) {
+                rctx.beginPath();
+                rctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                rctx.fill();
 
-            d.y += d.s;
-            d.x += wind * 2;
+                d.y += d.s;
+                d.x += wind * d.drift;
+            } else {
+                rctx.beginPath();
+                rctx.moveTo(d.x, d.y);
+                rctx.lineTo(d.x + angle, d.y + d.l);
+                rctx.stroke();
+
+                d.y += d.s;
+                d.x += wind * 2;
+            }
 
             if (
                 d.y > rainCanvas.height + rainSpawnPadding ||
                 d.x < -rainSpawnPadding * 2 ||
                 d.x > rainCanvas.width + rainSpawnPadding * 2
             ) {
-                d.y = -d.l - Math.random() * rainSpawnPadding;
+                const newDrop = createDrop(isSnow);
                 d.x = Math.random() * (rainCanvas.width + rainSpawnPadding * 2) - rainSpawnPadding;
+                d.y = -Math.random() * rainSpawnPadding - (isSnow ? newDrop.r * 2 : newDrop.l);
+                d.l = newDrop.l;
+                d.s = newDrop.s;
+                d.r = newDrop.r;
+                d.drift = newDrop.drift;
             }
         }
 
         const stormChance =
-            currentWeather.rain > 2 && currentWeather.cloud > 90;
+            !isSnow && currentWeather.rain > 2 && currentWeather.cloud > 90;
 
         if (stormChance && Math.random() < 0.01) {
             triggerLightning();
@@ -351,6 +374,7 @@ function drawRain() {
 // 🎮 DATA LOOP
 // =====================================================
 let currentWeather = null;
+let precipitationType = null;
 
 async function updateData() {
     if (MODE === "TEST") {
@@ -359,9 +383,20 @@ async function updateData() {
         currentWeather = await fetchWeather();
     }
 
+    const newPrecipitationType =
+        currentWeather.name === "SNÍH" || currentWeather.temp <= 0 ? "snow" :
+        currentWeather.rain > 0.1 ? "rain" :
+        "none";
+
     raining = currentWeather.rain > 0.1;
 
-    if (raining && drops.length === 0) initRain();
+    if (newPrecipitationType !== precipitationType) {
+        precipitationType = newPrecipitationType;
+        if (raining) initRain();
+        else drops = [];
+    } else if (raining && drops.length === 0) {
+        initRain();
+    }
 
     renderVisual(currentWeather);
 
