@@ -308,7 +308,9 @@ function drawRain() {
     rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rctx.strokeStyle = "white";
+        rctx.strokeStyle = currentWeather?.name === "DÉŠŤ"
+            ? "rgba(120,140,160,0.95)"
+            : "white";
         rctx.lineWidth = 1.5;
 
         for (let d of drops) {
