@@ -2,16 +2,24 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – V2 debug</title>
+<title>Okno do dvora – V2 debug fixed</title>
 
 <style>
 body {
     margin: 0;
     overflow: hidden;
-    transition: background 2s ease, filter 2s ease;
 }
 
-/* 🌐 DEBUG PANEL */
+/* 🌍 SVĚT (rozmazává se) */
+#world {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* 🧠 DEBUG UI (OSTRÉ) */
 #debug {
     position: fixed;
     top: 10px;
@@ -22,7 +30,7 @@ body {
     font-size: 13px;
     line-height: 1.4;
 
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.55);
     color: #fff;
     padding: 10px;
     border-radius: 6px;
@@ -43,18 +51,18 @@ canvas {
 
 <body>
 
-<canvas id="rain"></canvas>
-<canvas id="snow"></canvas>
+<div id="world">
+    <canvas id="rain"></canvas>
+    <canvas id="snow"></canvas>
+</div>
 
 <div id="debug"></div>
 
 <script>
-const LAT = 50.107109;
-const LON = 14.447331;
-
 const TEST_MODE = true;
 
 const debugEl = document.getElementById("debug");
+const worldEl = document.getElementById("world");
 
 let testIndex = 0;
 
@@ -76,14 +84,14 @@ const testStates = [
 ];
 
 // =========================
-// 🎨 VISUAL LOGIC
+// 🎨 VISUAL SYSTEM
 // =========================
 function updateVisuals(w) {
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    // 🌡️ barva teploty
+    // 🌡️ barva
     let bg;
     if (t >= 30) bg = "#ffb36b";
     else if (t >= 20) bg = "#ffd27a";
@@ -93,9 +101,10 @@ function updateVisuals(w) {
 
     document.body.style.background = bg;
 
-    // ☁️ mlha = blur + kontrast
+    // ☁️ mlha efekt
     const fog = Math.min(c / 100, 0.9);
-    document.body.style.filter = `
+
+    worldEl.style.filter = `
         blur(${fog * 3}px)
         brightness(${1 - fog * 0.25})
     `;
@@ -105,7 +114,7 @@ function updateVisuals(w) {
 }
 
 // =========================
-// 🧠 DEBUG EXPLANATION ENGINE
+// 🧠 DEBUG EXPLANATION
 // =========================
 function explain(w) {
     const t = w.temperature_2m;
@@ -114,24 +123,20 @@ function explain(w) {
 
     let reasons = [];
 
-    // teplota
-    if (t >= 30) reasons.push("extrémní teplo → oranžová/teplá barva");
-    else if (t >= 20) reasons.push("teplo → žlutý tón");
-    else if (t >= 10) reasons.push("mírná teplota → studenější modrá");
+    if (t >= 30) reasons.push("extrémní teplo → teplý tón");
+    else if (t >= 20) reasons.push("teplo → žlutá paleta");
+    else if (t >= 10) reasons.push("mírná teplota → studený tón");
     else reasons.push("chlad → modrá/ledový tón");
 
-    // oblačnost
-    if (c > 90) reasons.push("vysoká oblačnost → silný blur (mlha efekt)");
+    if (c > 90) reasons.push("vysoká oblačnost → silný blur (mlha)");
     else if (c > 60) reasons.push("střední oblačnost → jemný blur");
-    else reasons.push("nízká oblačnost → čistý obraz");
+    else reasons.push("nízká oblačnost → ostrý obraz");
 
-    // srážky
-    if (p >= 2) reasons.push("silný déšť → aktivní rain particle system");
-    else if (p >= 0.1) reasons.push("slabý déšť → lehké částice");
-    else reasons.push("bez srážek → klidná scéna");
+    if (p >= 2) reasons.push("silný déšť → husté částice");
+    else if (p >= 0.1) reasons.push("slabý déšť → jemné částice");
+    else reasons.push("bez srážek");
 
-    // sníh logika
-    if (t <= 0 && p > 0) reasons.push("teplota ≤ 0 + srážky → snow system aktivní");
+    if (t <= 0 && p > 0) reasons.push("sníh aktivní systém");
 
     return reasons.join("\n");
 }
