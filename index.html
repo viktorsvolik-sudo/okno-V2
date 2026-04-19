@@ -65,16 +65,23 @@ canvas {
 const MODE = "TEST";
 
 // =====================================================
-// 🧪 TEST DATA (added storm intensity implicit via rain/cloud)
+// 🌅 DAYLIGHT SETTINGS
+// =====================================================
+const SUNRISE_HOUR = 6;
+const SUNSET_HOUR = 20;
+const TWILIGHT_LENGTH = 2;
+
+// =====================================================
+// 🧪 TEST DATA
 // =====================================================
 const testStates = [
     { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0, hour:15 },
-    { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2, hour:10 },
-    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:17 },
+    { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2, hour:9 },
+    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:18 },
     { name:"MLHA", temp:4, rain:0, cloud:98, wind:0, hour:5 },
     { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
-    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1, hour:22 },
-    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3, hour:8 }
+    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1, hour:21 },
+    { name:"SNÍH", temp:-1, rain:0.5, cloud:90, wind:-0.3, hour:7 }
 ];
 
 let testIndex = 0;
@@ -94,7 +101,7 @@ function normalizeWeather(raw) {
 }
 
 // =====================================================
-// 🌐 OPEN METEO (unchanged conceptually)
+// 🌐 OPEN METEO
 // =====================================================
 async function fetchWeather() {
     const res = await fetch(
@@ -110,7 +117,7 @@ async function fetchWeather() {
         precipitation: data.current.precipitation,
         cloudcover: data.current.cloudcover,
         wind,
-        hour: new Date().getHours()
+        hour: new Date().getHours() + (new Date().getMinutes() / 60)
     });
 }
 
@@ -118,7 +125,6 @@ async function fetchWeather() {
 // 🌈 COLOR ENGINE
 // =====================================================
 function getBackgroundColor(t, cloud) {
-
     let base =
         t >= 30 ? [255,170,100] :
         t >= 20 ? [255,210,120] :
@@ -126,28 +132,63 @@ function getBackgroundColor(t, cloud) {
         t > 0 ? [160,190,255] :
         [200,220,255];
 
-    const mix = (cloud/100) * 0.6;
+    const mix = (cloud / 100) * 0.6;
 
-    return `rgb(
-        ${Math.round(base[0] + (255-base[0])*mix)},
-        ${Math.round(base[1] + (255-base[1])*mix)},
-        ${Math.round(base[2] + (255-base[2])*mix)}
-    )`;
+    return [
+        Math.round(base[0] + (255 - base[0]) * mix),
+        Math.round(base[1] + (255 - base[1]) * mix),
+        Math.round(base[2] + (255 - base[2]) * mix)
+    ];
+}
+
+function rgbArrayToString(rgb) {
+    return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
 // =====================================================
-// 🌙 DARKEN
+// 🌙 LIGHT MODEL
 // =====================================================
-function darkenColor(rgb, f) {
-    const n = rgb.match(/\d+/g).map(Number);
-    return `rgb(${n[0]*f},${n[1]*f},${n[2]*f})`;
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+function getDaylightFactor(hour) {
+    const sunriseStart = SUNRISE_HOUR - TWILIGHT_LENGTH;
+    const sunriseEnd = SUNRISE_HOUR + TWILIGHT_LENGTH;
+    const sunsetStart = SUNSET_HOUR - TWILIGHT_LENGTH;
+    const sunsetEnd = SUNSET_HOUR + TWILIGHT_LENGTH;
+
+    if (hour < sunriseStart || hour >= sunsetEnd) return 0;
+    if (hour >= sunriseEnd && hour < sunsetStart) return 1;
+
+    if (hour >= sunriseStart && hour < sunriseEnd) {
+        return clamp((hour - sunriseStart) / (sunriseEnd - sunriseStart), 0, 1);
+    }
+
+    if (hour >= sunsetStart && hour < sunsetEnd) {
+        return clamp(1 - ((hour - sunsetStart) / (sunsetEnd - sunsetStart)), 0, 1);
+    }
+
+    return 1;
+}
+
+function applyLightToColor(rgb, daylight) {
+    const factor = lerp(0.35, 1, daylight);
+    return [
+        Math.round(rgb[0] * factor),
+        Math.round(rgb[1] * factor),
+        Math.round(rgb[2] * factor)
+    ];
 }
 
 // =====================================================
 // 🌍 VISUAL SYSTEM
 // =====================================================
 function renderVisual(s) {
-
     const fog = s.cloud / 100;
     const isFullFog = s.cloud >= 95;
 
@@ -158,22 +199,22 @@ function renderVisual(s) {
 
     const hour = MODE === "TEST"
         ? (s.hour ?? 12)
-        : new Date().getHours();
+        : new Date().getHours() + (new Date().getMinutes() / 60);
 
-    const isNight = (hour >= 20 || hour < 6);
+    const daylight = getDaylightFactor(hour);
 
-    let bg = getBackgroundColor(s.temp, s.cloud);
-    if (isNight) bg = darkenColor(bg, 0.5);
+    const baseColor = getBackgroundColor(s.temp, s.cloud);
+    const finalColor = applyLightToColor(baseColor, daylight);
 
-    document.body.style.background = bg;
+    document.body.style.background = rgbArrayToString(finalColor);
 
     document.getElementById("fog").style.background =
-        `rgba(255,255,255,${isFullFog ? 0.75 : fog*0.2})`;
+        `rgba(255,255,255,${isFullFog ? 0.75 : fog * 0.2})`;
 
     document.getElementById("world").style.filter = `
         blur(${blur}px)
-        brightness(${1 - fog*0.25})
-        contrast(${1 - fog*0.15})
+        brightness(${lerp(0.72, 1, daylight) - fog * 0.18})
+        contrast(${1 - fog * 0.15})
     `;
 }
 
@@ -221,7 +262,6 @@ resizeLightning();
 let lightningActive = false;
 
 function triggerLightning() {
-
     lightningActive = true;
 
     lctx.fillStyle = "rgba(255,255,255,0.9)";
@@ -248,7 +288,6 @@ function triggerLightning() {
 // 🌧️ DRAW RAIN + STORM TRIGGER
 // =====================================================
 function drawRain() {
-
     const wind = currentWeather?.wind || 0;
     const angle = wind * 8;
 
@@ -290,7 +329,6 @@ function drawRain() {
 let currentWeather = null;
 
 async function updateData() {
-
     if (MODE === "TEST") {
         currentWeather = normalizeWeather(testStates[testIndex]);
     } else {
@@ -306,6 +344,8 @@ async function updateData() {
     const debug = document.getElementById("debug");
 
     if (MODE === "TEST") {
+        const daylight = getDaylightFactor(currentWeather.hour ?? 12);
+
         debug.style.display = "block";
         debug.textContent =
 `${currentWeather.name}
@@ -313,7 +353,8 @@ TEMP: ${currentWeather.temp}
 RAIN: ${currentWeather.rain}
 CLOUD: ${currentWeather.cloud}
 WIND: ${currentWeather.wind}
-HOUR: ${currentWeather.hour ?? 12}`;
+HOUR: ${currentWeather.hour ?? 12}
+LIGHT: ${daylight.toFixed(2)}`;
     } else {
         debug.style.display = "none";
     }
