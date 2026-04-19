@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -240,23 +241,29 @@ const rctx = rainCanvas.getContext("2d");
 
 let drops = [];
 let raining = false;
+let rainSpawnPadding = 120;
 
 function resize() {
     rainCanvas.width = innerWidth;
     rainCanvas.height = innerHeight;
+    rainSpawnPadding = Math.max(120, innerWidth * 0.12);
 }
 addEventListener("resize", resize);
 resize();
 
+function createDrop() {
+    return {
+        x: Math.random() * (rainCanvas.width + rainSpawnPadding * 2) - rainSpawnPadding,
+        y: Math.random() * (rainCanvas.height + rainSpawnPadding * 2) - rainSpawnPadding,
+        l: Math.random() * 40 + 20,
+        s: Math.random() * 8 + 4
+    };
+}
+
 function initRain() {
     drops = [];
-    for (let i = 0; i < 350; i++) {
-        drops.push({
-            x: Math.random() * rainCanvas.width,
-            y: Math.random() * rainCanvas.height,
-            l: Math.random() * 40 + 20,
-            s: Math.random() * 8 + 4
-        });
+    for (let i = 0; i < 500; i++) {
+        drops.push(createDrop());
     }
 }
 
@@ -322,9 +329,13 @@ function drawRain() {
             d.y += d.s;
             d.x += wind * 2;
 
-            if (d.y > rainCanvas.height) {
-                d.y = -20;
-                d.x = Math.random() * rainCanvas.width;
+            if (
+                d.y > rainCanvas.height + rainSpawnPadding ||
+                d.x < -rainSpawnPadding * 2 ||
+                d.x > rainCanvas.width + rainSpawnPadding * 2
+            ) {
+                d.y = -d.l - Math.random() * rainSpawnPadding;
+                d.x = Math.random() * (rainCanvas.width + rainSpawnPadding * 2) - rainSpawnPadding;
             }
         }
 
@@ -400,3 +411,4 @@ drawRain();
 
 </body>
 </html>
+```
