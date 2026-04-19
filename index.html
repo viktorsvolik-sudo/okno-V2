@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – Time Simulation</title>
+<title>Okno do dvora – FIX</title>
 
 <style>
 body {
@@ -61,11 +61,9 @@ canvas {
 const MODE = "TEST";
 
 // =====================================================
-// 🧪 TEST TIME CONTROL (NEW)
-// shift in HOURS
-// e.g. -6 = make it night, +6 = future day
+// 🧪 TEST TIME CONTROL
 // =====================================================
-const TEST_TIME_OFFSET = -0; 
+const TEST_TIME_OFFSET = -0;
 
 // =====================================================
 // 🧪 TEST DATA
@@ -79,11 +77,10 @@ const testStates = [
 let testIndex = 0;
 
 // =====================================================
-// 🧠 TIME SYSTEM (UPDATED)
+// 🧠 TIME
 // =====================================================
 function getTimeInfo() {
     const now = new Date();
-
     let simulated = new Date(now);
 
     if (MODE === "TEST") {
@@ -102,7 +99,7 @@ function getTimeInfo() {
 }
 
 // =====================================================
-// 🌍 VISUAL SYSTEM (ONLY TIME AFFECTS LIGHT)
+// 🌍 VISUAL
 // =====================================================
 function renderVisual(s) {
 
@@ -113,9 +110,8 @@ function renderVisual(s) {
         s.temp > 10 ? "rgb(170,200,255)" :
         "rgb(120,160,220)";
 
-    // 🌙 NIGHT SHIFT
     if (time.isNight) {
-        bg = darken(bg, 0.55);
+        bg = darken(bg, 0.45);
     }
 
     document.body.style.background = bg;
@@ -130,7 +126,7 @@ function darken(rgb, f) {
 }
 
 // =====================================================
-// 🎮 DATA LOOP
+// 🎮 UPDATE LOOP (FIX HERE)
 // =====================================================
 let currentWeather = null;
 
@@ -139,6 +135,9 @@ function update() {
     currentWeather = testStates[testIndex];
 
     const time = getTimeInfo();
+
+    // ✅ FIX: VISUAL UPDATE WAS MISSING
+    renderVisual(currentWeather);
 
     document.getElementById("debug").textContent =
 `${currentWeather.name}
