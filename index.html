@@ -10,7 +10,7 @@ body {
     overflow: hidden;
 }
 
-/* 🌍 SVĚT (rozmazává se) */
+/* 🌍 SVĚT (pozadí + atmosféra) */
 #world {
     position: fixed;
     top: 0;
@@ -40,6 +40,7 @@ body {
     pointer-events: none;
 }
 
+/* 🌧️ CANVAS BEZ BLURU */
 canvas {
     position: absolute;
     top: 0;
@@ -65,8 +66,6 @@ const debugEl = document.getElementById("debug");
 const worldEl = document.getElementById("world");
 
 let testIndex = 0;
-
-// 🔴 FIX: tracking změny deště
 let lastRainState = false;
 
 // =========================
@@ -93,6 +92,7 @@ function updateVisuals(w) {
     const t = w.temperature_2m;
     const c = w.cloudcover;
 
+    // 🌡️ barva pozadí
     let bg;
     if (t >= 30) bg = "#ffb36b";
     else if (t >= 20) bg = "#ffd27a";
@@ -102,11 +102,12 @@ function updateVisuals(w) {
 
     document.body.style.background = bg;
 
+    // ☁️ ATMOSFÉRA (ALE BEZ VLIVU NA CANVAS)
     const fog = Math.min(c / 100, 0.9);
 
+    worldEl.style.background = bg;
     worldEl.style.filter = `
-        blur(${fog * 3}px)
-        brightness(${1 - fog * 0.25})
+        brightness(${1 - fog * 0.2})
     `;
 
     updateRain(w);
@@ -124,13 +125,13 @@ function explain(w) {
     let reasons = [];
 
     if (t >= 30) reasons.push("teplo → teplý tón");
-    else if (t >= 20) reasons.push("mírné teplo → žlutý tón");
-    else if (t >= 10) reasons.push("chlad → modrý tón");
-    else reasons.push("zima → studený tón");
+    else if (t >= 20) reasons.push("mírné teplo");
+    else if (t >= 10) reasons.push("chladnější tón");
+    else reasons.push("zima");
 
-    if (c > 90) reasons.push("mlha (silný blur)");
-    else if (c > 60) reasons.push("oblačnost (střední blur)");
-    else reasons.push("jasno (ostré)");
+    if (c > 90) reasons.push("mlha (vizuální ztráta kontrastu)");
+    else if (c > 60) reasons.push("oblačnost");
+    else reasons.push("jasno");
 
     if (p >= 2) reasons.push("silný déšť");
     else if (p >= 0.1) reasons.push("slabý déšť");
@@ -142,7 +143,7 @@ function explain(w) {
 }
 
 // =========================
-// 🌧️ RAIN (FIXED)
+// 🌧️ RAIN (OSTRÝ - BEZ BLURU)
 // =========================
 const rainCanvas = document.getElementById("rain");
 const rainCtx = rainCanvas.getContext("2d");
@@ -158,7 +159,7 @@ window.addEventListener("resize", resizeRain);
 resizeRain();
 
 function initRain() {
-    drops = []; // 🔴 důležité: vždy reset
+    drops = [];
 
     for (let i = 0; i < 120; i++) {
         drops.push({
@@ -171,22 +172,21 @@ function initRain() {
 }
 
 function updateRain(w) {
-    const newRainState = w.precipitation >= 0.1;
+    const newState = w.precipitation >= 0.1;
 
-    // 🔴 restart při změně sucho → déšť
-    if (newRainState && !lastRainState) {
+    if (newState && !lastRainState) {
         initRain();
     }
 
-    raining = newRainState;
-    lastRainState = newRainState;
+    raining = newState;
+    lastRainState = newState;
 }
 
 function drawRain() {
     rainCtx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
     if (raining) {
-        rainCtx.strokeStyle = "rgba(255,255,255,0.5)";
+        rainCtx.strokeStyle = "rgba(255,255,255,0.6)";
 
         for (let d of drops) {
             rainCtx.beginPath();
@@ -219,7 +219,7 @@ window.addEventListener("resize", resizeSnow);
 resizeSnow();
 
 function initSnow() {
-    if (snowflakes.length) return;
+    snowflakes = [];
 
     for (let i = 0; i < 80; i++) {
         snowflakes.push({
