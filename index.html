@@ -16,13 +16,10 @@ body {
     inset: 0;
 }
 
-#shadows {
+#fog {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    mix-blend-mode: multiply;
-    opacity: 0.55;
-    filter: blur(18px);
 }
 
 #debug {
@@ -51,7 +48,6 @@ canvas {
 <body>
 
 <div id="world">
-    <canvas id="shadows"></canvas>
     <canvas id="clouds"></canvas>
     <canvas id="rain"></canvas>
     <canvas id="fog"></canvas>
@@ -66,6 +62,13 @@ canvas {
 // MODE
 // =====================================================
 const MODE = "TEST";
+
+// =====================================================
+// DAYLIGHT SETTINGS
+// =====================================================
+const SUNRISE_HOUR = 6;
+const SUNSET_HOUR = 20;
+const TWILIGHT_LENGTH = 2;
 
 // =====================================================
 // TEST DATA
@@ -83,135 +86,152 @@ const testStates = [
 ];
 
 let testIndex = 0;
-let currentWeather = null;
 
 // =====================================================
-// HELPERS
+// NORMALIZE
 // =====================================================
-function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
-function lerp(a,b,t){return a+(b-a)*t;}
-
-// =====================================================
-// SHADOW SYSTEM
-// =====================================================
-const shadowsCanvas = document.getElementById("shadows");
-const shctx = shadowsCanvas.getContext("2d");
-
-let shadowBands = [];
-let shadowState = { density:0, wind:0, storm:0 };
-
-function resizeShadows(){
-    shadowsCanvas.width = innerWidth;
-    shadowsCanvas.height = innerHeight;
-}
-addEventListener("resize", resizeShadows);
-resizeShadows();
-
-function createShadowBand(i=0){
-    const layer = i%3;
+function normalizeWeather(raw) {
     return {
-        x: Math.random()*innerWidth,
-        y: innerHeight*(0.3+layer*0.12),
-        w: Math.random()*800+800,
-        h: Math.random()*140+120,
-        speed: 0.02+Math.random()*0.04,
-        wobble: Math.random()*Math.PI*2,
-        layer
+        name: raw.name || "LIVE",
+        temp: raw.temperature_2m ?? raw.temp,
+        rain: raw.precipitation ?? raw.rain,
+        cloud: raw.cloudcover ?? raw.cloud,
+        wind: raw.wind ?? 0,
+        hour: raw.hour
     };
 }
 
-function initShadows(){
-    shadowBands=[];
-    for(let i=0;i<6;i++) shadowBands.push(createShadowBand(i));
+// =====================================================
+// OPEN METEO
+// =====================================================
+async function fetchWeather() {
+    const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.1071&longitude=14.4473&current=temperature_2m,precipitation,cloudcover,wind_speed_10m,wind_direction_10m");
+    const data = await res.json();
+
+    const wind = Math.sin(data.current.wind_direction_10m * Math.PI / 180);
+
+    return normalizeWeather({
+        name: "LIVE",
+        temperature_2m: data.current.temperature_2m,
+        precipitation: data.current.precipitation,
+        cloudcover: data.current.cloudcover,
+        wind,
+        hour: new Date().getHours() + (new Date().getMinutes() / 60)
+    });
 }
-
-function updateShadowState(w){
-    shadowState.density = clamp((w.cloud-20)/80,0,1);
-    shadowState.wind = w.wind||0;
-    shadowState.storm = w.name==="BOURE"?1:0;
-}
-
-function drawShadowsFrame(){
-    shctx.clearRect(0,0,innerWidth,innerHeight);
-
-    const baseAlpha = 0.05 + shadowState.density*0.2;
-
-    for(const b of shadowBands){
-        b.x += b.speed + shadowState.wind*0.1;
-
-        if(b.x > innerWidth+300) b.x = -300;
-
-        const alpha = baseAlpha*(0.8+b.layer*0.1);
-
-        const g = shctx.createRadialGradient(
-            b.x,b.y,50,
-            b.x,b.y,b.w
-        );
-
-        g.addColorStop(0,`rgba(0,0,0,${alpha})`);
-        g.addColorStop(1,"rgba(0,0,0,0)");
-
-        shctx.fillStyle=g;
-        shctx.beginPath();
-        shctx.ellipse(b.x,b.y,b.w,b.h,0,0,Math.PI*2);
-        shctx.fill();
-    }
-
-    requestAnimationFrame(drawShadowsFrame);
-}
-
-initShadows();
-requestAnimationFrame(drawShadowsFrame);
 
 // =====================================================
-// COLOR SYSTEM (FIXED)
+// COLOR ENGINE
 // =====================================================
-function renderVisual(s){
-
+function getBackgroundColor(t, cloud) {
     let base =
-        s.temp >= 30 ? [250,153,35] :
-        s.temp >= 20 ? [255,210,120] :
-        s.temp >= 10 ? [180,210,255] :
-        s.temp > 0 ? [160,190,255] :
+        t >= 30 ? [250,153,35] :
+        t >= 20 ? [255,210,120] :
+        t >= 10 ? [180,210,255] :
+        t > 0 ? [160,190,255] :
         [200,220,255];
 
-    const mix = (s.cloud / 100) * 0.6;
+    const mix = (cloud / 100) * 0.6;
 
-    const r = Math.round(base[0] + (255 - base[0]) * mix);
-    const g = Math.round(base[1] + (255 - base[1]) * mix);
-    const b = Math.round(base[2] + (255 - base[2]) * mix);
+    return [
+        Math.round(base[0] + (255 - base[0]) * mix),
+        Math.round(base[1] + (255 - base[1]) * mix),
+        Math.round(base[2] + (255 - base[2]) * mix)
+    ];
+}
 
-    document.body.style.background = `rgb(${r},${g},${b})`;
+function rgbArrayToString(rgb) {
+    return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
 // =====================================================
-// LOOP
+// LIGHT MODEL
 // =====================================================
-function updateData(){
-    currentWeather = testStates[testIndex];
-
-    renderVisual(currentWeather);
-    updateShadowState(currentWeather);
-
-    // DEBUG
-    document.getElementById("debug").textContent =
-`${currentWeather.name}
-TEMP: ${currentWeather.temp}
-RAIN: ${currentWeather.rain}
-CLOUD: ${currentWeather.cloud}
-WIND: ${currentWeather.wind}
-HOUR: ${currentWeather.hour}
-SHADOW: ${shadowState.density.toFixed(2)}`;
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
 }
 
-addEventListener("keydown", e=>{
-    if(e.key==="ArrowRight") testIndex++;
-    if(e.key==="ArrowLeft") testIndex--;
-    testIndex = (testIndex+testStates.length)%testStates.length;
-    updateData();
-});
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
 
-updateData();
+function getDaylightFactor(hour) {
+    const sunriseStart = SUNRISE_HOUR - TWILIGHT_LENGTH;
+    const sunriseEnd = SUNRISE_HOUR + TWILIGHT_LENGTH;
+    const sunsetStart = SUNSET_HOUR - TWILIGHT_LENGTH;
+    const sunsetEnd = SUNSET_HOUR + TWILIGHT_LENGTH;
+
+    if (hour < sunriseStart || hour >= sunsetEnd) return 0;
+    if (hour >= sunriseEnd && hour < sunsetStart) return 1;
+
+    if (hour >= sunriseStart && hour < sunriseEnd) {
+        return clamp((hour - sunriseStart) / (sunriseEnd - sunriseStart), 0, 1);
+    }
+
+    if (hour >= sunsetStart && hour < sunsetEnd) {
+        return clamp(1 - ((hour - sunsetStart) / (sunsetEnd - sunsetStart)), 0, 1);
+    }
+
+    return 1;
+}
+
+function applyLightToColor(rgb, daylight) {
+    const factor = lerp(0.10, 1, daylight);
+    return [
+        Math.round(rgb[0] * factor),
+        Math.round(rgb[1] * factor),
+        Math.round(rgb[2] * factor)
+    ];
+}
+
+// =====================================================
+// VISUAL SYSTEM
+// =====================================================
+function isSnowWeather(s) {
+    return s.name === "SNIH" || s.temp <= 0;
+}
+
+function isFogWeather(s) {
+    return s.name === "MLHA" || s.cloud >= 95;
+}
+
+function renderVisual(s) {
+    const fog = s.cloud / 100;
+    const isFullFog = s.cloud >= 95;
+    const isSnow = isSnowWeather(s);
+
+    let blur = 0;
+    if (s.rain > 0 && !isFullFog) blur = 0.6;
+    if (s.name === "BOURE") blur = 1;
+    if (isSnow) blur = Math.max(blur, 0.8);
+
+    const hour = MODE === "TEST"
+        ? (s.hour ?? 12)
+        : new Date().getHours() + (new Date().getMinutes() / 60);
+
+    const daylight = getDaylightFactor(hour);
+
+    let baseColor = getBackgroundColor(s.temp, s.cloud);
+
+    if (isSnow) {
+        baseColor = [
+            Math.round(baseColor[0] * 0.72),
+            Math.round(baseColor[1] * 0.76),
+            Math.round(baseColor[2] * 0.84)
+        ];
+    }
+
+    const finalColor = applyLightToColor(baseColor, daylight);
+
+    document.body.style.background = rgbArrayToString(finalColor);
+
+    document.getElementById("world").style.filter =
+        `blur(${blur}px) brightness(${(isSnow ? lerp(0.52, 0.9, daylight) : lerp(0.5, 1, daylight)) - fog * 0.03}) contrast(${1 - fog * 0.03})`;
+}
+
+// =====================================================
+// (zbytek systému beze změn)
+// =====================================================
 
 </script>
 
