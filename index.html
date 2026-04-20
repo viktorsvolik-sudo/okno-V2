@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Okno do dvora – Storm System</title>
+<title>Okno do dvora - Storm System</title>
 
 <style>
 body {
@@ -20,8 +20,6 @@ body {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background: rgba(255,255,255,0);
-    transition: background 0.4s ease;
 }
 
 #debug {
@@ -50,45 +48,46 @@ canvas {
 <body>
 
 <div id="world">
+    <canvas id="clouds"></canvas>
     <canvas id="rain"></canvas>
+    <canvas id="fog"></canvas>
     <canvas id="lightning"></canvas>
 </div>
 
-<div id="fog"></div>
 <div id="debug"></div>
 
 <script>
 
 // =====================================================
-// ⚙️ MODE
+// MODE
 // =====================================================
 const MODE = "TEST";
 
 // =====================================================
-// 🌅 DAYLIGHT SETTINGS
+// DAYLIGHT SETTINGS
 // =====================================================
 const SUNRISE_HOUR = 6;
 const SUNSET_HOUR = 20;
 const TWILIGHT_LENGTH = 2;
 
 // =====================================================
-// 🧪 TEST DATA
+// TEST DATA
 // =====================================================
 const testStates = [
     { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0, hour:15 },
     { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2, hour:9 },
-    { name:"JASNÁ NOC", temp:12, rain:0, cloud:0, wind:0.1, hour:1 },
-    { name:"OBLAČNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:18 },
+    { name:"JASNA NOC", temp:12, rain:0, cloud:0, wind:0.1, hour:1 },
+    { name:"OBLACNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:18 },
     { name:"MLHA", temp:4, rain:0, cloud:98, wind:0, hour:5 },
-    { name:"DÉŠŤ", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
-    { name:"BOUŘE", temp:19, rain:6, cloud:100, wind:1, hour:21 },
-    { name:"SNÍH", temp:-3, rain:0.7, cloud:100, wind:-0.3, hour:9 }
+    { name:"DEST", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
+    { name:"BOURE", temp:19, rain:6, cloud:100, wind:1, hour:21 },
+    { name:"SNIH", temp:-3, rain:0.7, cloud:100, wind:-0.3, hour:9 }
 ];
 
 let testIndex = 0;
 
 // =====================================================
-// 🌍 NORMALIZE
+// NORMALIZE
 // =====================================================
 function normalizeWeather(raw) {
     return {
@@ -102,11 +101,11 @@ function normalizeWeather(raw) {
 }
 
 // =====================================================
-// 🌐 OPEN METEO
+// OPEN METEO
 // =====================================================
 async function fetchWeather() {
     const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=50.1071&longitude=14.4473&current=temperature_2m,precipitation,cloudcover,wind_speed_10m,wind_direction_10m`
+        "https://api.open-meteo.com/v1/forecast?latitude=50.1071&longitude=14.4473&current=temperature_2m,precipitation,cloudcover,wind_speed_10m,wind_direction_10m"
     );
     const data = await res.json();
 
@@ -123,7 +122,7 @@ async function fetchWeather() {
 }
 
 // =====================================================
-// 🌈 COLOR ENGINE
+// COLOR ENGINE
 // =====================================================
 function getBackgroundColor(t, cloud) {
     let base =
@@ -147,7 +146,7 @@ function rgbArrayToString(rgb) {
 }
 
 // =====================================================
-// 🌙 LIGHT MODEL
+// LIGHT MODEL
 // =====================================================
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -187,20 +186,27 @@ function applyLightToColor(rgb, daylight) {
 }
 
 // =====================================================
-// 🌍 VISUAL SYSTEM
+// VISUAL SYSTEM
 // =====================================================
+function isSnowWeather(s) {
+    return s.name === "SNIH" || s.name === "SNIH" || s.temp <= 0;
+}
+
+function isFogWeather(s) {
+    return s.name === "MLHA" || s.cloud >= 95;
+}
+
 function renderVisual(s) {
     const fog = s.cloud / 100;
     const isFullFog = s.cloud >= 95;
-    const isSnow = s.name === "SNÍH" || s.temp <= 0;
+    const isSnow = isSnowWeather(s);
 
     let blur = 0;
     if (s.rain > 0 && !isFullFog) blur = 0.6;
-    if (s.name === "BOUŘE") blur = 1;
-    if (isFullFog && !isSnow) blur = 6;
+    if (s.name === "BOURE") blur = 1;
     if (isSnow) blur = Math.max(blur, 0.8);
 
-    const hour = MODE === "TEST"
+    const hour = MODE === "LIVE"
         ? (s.hour ?? 12)
         : new Date().getHours() + (new Date().getMinutes() / 60);
 
@@ -220,9 +226,6 @@ function renderVisual(s) {
 
     document.body.style.background = rgbArrayToString(finalColor);
 
-    document.getElementById("fog").style.background =
-        `rgba(255,255,255,${isSnow ? fog * 0.025 : fog * 0.035})`;
-
     document.getElementById("world").style.filter = `
         blur(${blur}px)
         brightness(${(isSnow ? lerp(0.52, 0.9, daylight) : lerp(0.5, 1, daylight)) - fog * 0.03})
@@ -231,7 +234,7 @@ function renderVisual(s) {
 }
 
 // =====================================================
-// 🌧️ PRECIPITATION
+// PRECIPITATION
 // =====================================================
 const rainCanvas = document.getElementById("rain");
 const rctx = rainCanvas.getContext("2d");
@@ -260,7 +263,7 @@ function createDrop(isSnow = false) {
 }
 
 function initRain() {
-    const isSnow = currentWeather?.name === "SNÍH" || currentWeather?.temp <= 0;
+    const isSnow = isSnowWeather(currentWeather ?? {});
 
     drops = [];
     for (let i = 0; i < 500; i++) {
@@ -269,7 +272,232 @@ function initRain() {
 }
 
 // =====================================================
-// ⚡ LIGHTNING SYSTEM
+// MOVING CLOUDS
+// =====================================================
+const cloudsCanvas = document.getElementById("clouds");
+const cctx = cloudsCanvas.getContext("2d");
+let cloudBands = [];
+let cloudState = {
+    density: 0,
+    wind: 0,
+    storm: 0,
+    daylight: 1
+};
+
+function resizeClouds() {
+    cloudsCanvas.width = innerWidth;
+    cloudsCanvas.height = innerHeight;
+}
+addEventListener("resize", resizeClouds);
+resizeClouds();
+
+function createCloudBand(index = 0) {
+    const layer = index % 3;
+    return {
+        x: Math.random() * (cloudsCanvas.width + 600) - 300,
+        y: cloudsCanvas.height * (0.08 + layer * 0.14) + Math.random() * cloudsCanvas.height * 0.08,
+        w: Math.random() * 500 + 900,
+        h: Math.random() * 120 + 140,
+        speed: 0.03 + Math.random() * 0.06,
+        wobble: Math.random() * Math.PI * 2,
+        driftY: (Math.random() - 0.5) * 0.015,
+        layer
+    };
+}
+
+function initClouds() {
+    cloudBands = [];
+    for (let i = 0; i < 7; i++) {
+        cloudBands.push(createCloudBand(i));
+    }
+}
+
+function updateCloudState(weather) {
+    const hour = MODE === "TEST"
+        ? (weather.hour ?? 12)
+        : new Date().getHours() + (new Date().getMinutes() / 60);
+    const daylight = getDaylightFactor(hour);
+
+    cloudState.density = clamp((weather.cloud - 8) / 92, 0, 1);
+    cloudState.wind = weather.wind || 0;
+    cloudState.storm = weather.name === "BOURE" ? 1 : clamp(weather.rain / 6, 0, 0.65);
+    cloudState.daylight = daylight;
+}
+
+function drawCloudsFrame(time) {
+    cctx.clearRect(0, 0, cloudsCanvas.width, cloudsCanvas.height);
+
+    if (cloudState.density <= 0.02) {
+        requestAnimationFrame(drawCloudsFrame);
+        return;
+    }
+
+    const t = time * 0.001;
+    const windPush = cloudState.wind * 0.12;
+    const baseAlpha = cloudState.density * 0.1;
+    const shade = Math.round(lerp(244, 196, cloudState.storm) * lerp(0.68, 1, cloudState.daylight));
+    const color = [shade, shade + 3, shade + 6];
+
+    for (const band of cloudBands) {
+        band.x += band.speed + windPush * (1 + band.layer * 0.18);
+        band.y += band.driftY + Math.sin(t * 0.08 + band.wobble) * 0.015;
+
+        if (band.x - band.w > cloudsCanvas.width + 300) {
+            band.x = -band.w - Math.random() * 260;
+            band.y = cloudsCanvas.height * (0.08 + band.layer * 0.14) + Math.random() * cloudsCanvas.height * 0.08;
+        }
+
+        if (band.x + band.w < -320) {
+            band.x = cloudsCanvas.width + band.w + Math.random() * 260;
+            band.y = cloudsCanvas.height * (0.08 + band.layer * 0.14) + Math.random() * cloudsCanvas.height * 0.08;
+        }
+
+        const pulse = 0.95 + Math.sin(t * (0.06 + band.layer * 0.015) + band.wobble) * 0.04;
+        const alpha = baseAlpha * (0.78 + band.layer * 0.08) * pulse;
+
+        const gradient = cctx.createLinearGradient(
+            band.x - band.w * 0.6, band.y,
+            band.x + band.w * 0.6, band.y + band.h * 0.15
+        );
+        gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+        gradient.addColorStop(0.18, `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.12})`);
+        gradient.addColorStop(0.5, `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.34})`);
+        gradient.addColorStop(0.82, `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.12})`);
+        gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+
+        cctx.fillStyle = gradient;
+        cctx.beginPath();
+        cctx.ellipse(band.x, band.y, band.w * 0.52, band.h * 0.52, 0, 0, Math.PI * 2);
+        cctx.fill();
+
+        const softTop = cctx.createLinearGradient(
+            band.x, band.y - band.h * 0.7,
+            band.x, band.y + band.h * 0.7
+        );
+        softTop.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+        softTop.addColorStop(0.35, `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.12})`);
+        softTop.addColorStop(0.5, `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.18})`);
+        softTop.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+
+        cctx.fillStyle = softTop;
+        cctx.beginPath();
+        cctx.ellipse(band.x, band.y, band.w * 0.42, band.h * 0.78, 0, 0, Math.PI * 2);
+        cctx.fill();
+    }
+
+    cctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${baseAlpha * 0.26})`;
+    cctx.fillRect(0, 0, cloudsCanvas.width, cloudsCanvas.height * 0.78);
+
+    requestAnimationFrame(drawCloudsFrame);
+}
+
+initClouds();
+requestAnimationFrame(drawCloudsFrame);
+
+// =====================================================
+// MOVING FOG
+// =====================================================
+const fogCanvas = document.getElementById("fog");
+const fctx = fogCanvas.getContext("2d");
+let fogPuffs = [];
+let fogState = {
+    density: 0,
+    wind: 0
+};
+
+function resizeFog() {
+    fogCanvas.width = innerWidth;
+    fogCanvas.height = innerHeight;
+}
+addEventListener("resize", resizeFog);
+resizeFog();
+
+function createFogPuff(index = 0) {
+    const layer = index % 3;
+    const scale = layer === 0 ? 1.25 : layer === 1 ? 1 : 0.82;
+    return {
+        x: Math.random() * fogCanvas.width,
+        y: Math.random() * fogCanvas.height,
+        r: (Math.random() * 180 + 140) * scale,
+        baseAlpha: 0.03 + Math.random() * 0.04,
+        speed: 0.08 + Math.random() * 0.2,
+        wobble: Math.random() * Math.PI * 2,
+        driftY: (Math.random() - 0.5) * 0.12,
+        layer
+    };
+}
+
+function initFog() {
+    fogPuffs = [];
+    for (let i = 0; i < 64; i++) {
+        fogPuffs.push(createFogPuff(i));
+    }
+}
+
+function updateFogState(weather) {
+    const densityBase = isFogWeather(weather) ? 1.35 : clamp((weather.cloud - 52) / 32, 0, 0.85);
+    fogState.density = densityBase;
+    fogState.wind = weather.wind || 0;
+}
+
+function drawFogFrame(time) {
+    fctx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+
+    if (fogState.density <= 0.01) {
+        requestAnimationFrame(drawFogFrame);
+        return;
+    }
+
+    const t = time * 0.001;
+    const wind = fogState.wind;
+    const windPush = wind * 0.42;
+    const baseOpacity = fogState.density * 0.5;
+
+    for (const puff of fogPuffs) {
+        puff.x += puff.speed * 1.35 + windPush * (1 + puff.layer * 0.45);
+        puff.y += puff.driftY * 1.4 + Math.sin(t * 0.42 + puff.wobble) * 0.08;
+
+        if (puff.x - puff.r > fogCanvas.width + 80) {
+            puff.x = -puff.r - Math.random() * 120;
+            puff.y = Math.random() * fogCanvas.height;
+        }
+
+        if (puff.x + puff.r < -120) {
+            puff.x = fogCanvas.width + puff.r + Math.random() * 120;
+            puff.y = Math.random() * fogCanvas.height;
+        }
+
+        if (puff.y < -puff.r) puff.y = fogCanvas.height + puff.r;
+        if (puff.y > fogCanvas.height + puff.r) puff.y = -puff.r;
+
+        const pulse = 0.8 + Math.sin(t * (0.42 + puff.layer * 0.1) + puff.wobble) * 0.24;
+        const alpha = puff.baseAlpha * baseOpacity * pulse;
+
+        const gradient = fctx.createRadialGradient(
+            puff.x, puff.y, puff.r * 0.15,
+            puff.x, puff.y, puff.r
+        );
+        gradient.addColorStop(0, `rgba(245,248,250,${alpha})`);
+        gradient.addColorStop(0.55, `rgba(245,248,250,${alpha * 0.68})`);
+        gradient.addColorStop(1, "rgba(245,248,250,0)");
+
+        fctx.fillStyle = gradient;
+        fctx.beginPath();
+        fctx.arc(puff.x, puff.y, puff.r, 0, Math.PI * 2);
+        fctx.fill();
+    }
+
+    fctx.fillStyle = `rgba(245,248,250,${baseOpacity * 0.18})`;
+    fctx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+
+    requestAnimationFrame(drawFogFrame);
+}
+
+initFog();
+requestAnimationFrame(drawFogFrame);
+
+// =====================================================
+// LIGHTNING SYSTEM
 // =====================================================
 const lightningCanvas = document.getElementById("lightning");
 const lctx = lightningCanvas.getContext("2d");
@@ -307,12 +535,12 @@ function triggerLightning() {
 }
 
 // =====================================================
-// 🌧️ DRAW PRECIPITATION + STORM TRIGGER
+// DRAW PRECIPITATION + STORM TRIGGER
 // =====================================================
 function drawRain() {
     const wind = currentWeather?.wind || 0;
     const angle = wind * 8;
-    const isSnow = currentWeather?.name === "SNÍH" || currentWeather?.temp <= 0;
+    const isSnow = isSnowWeather(currentWeather ?? {});
 
     rctx.clearRect(0, 0, rainCanvas.width, rainCanvas.height);
 
@@ -320,13 +548,13 @@ function drawRain() {
         if (isSnow) {
             rctx.fillStyle = "rgba(235,240,245,0.95)";
         } else {
-            rctx.strokeStyle = currentWeather?.name === "DÉŠŤ"
+            rctx.strokeStyle = currentWeather?.name === "DEST"
                 ? "rgba(120,140,160,0.95)"
                 : "white";
             rctx.lineWidth = 1.5;
         }
 
-        for (let d of drops) {
+        for (const d of drops) {
             if (isSnow) {
                 rctx.beginPath();
                 rctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
@@ -359,8 +587,7 @@ function drawRain() {
             }
         }
 
-        const stormChance =
-            !isSnow && currentWeather.rain > 2 && currentWeather.cloud > 90;
+        const stormChance = !isSnow && currentWeather.rain > 2 && currentWeather.cloud > 90;
 
         if (stormChance && Math.random() < 0.01) {
             triggerLightning();
@@ -371,7 +598,7 @@ function drawRain() {
 }
 
 // =====================================================
-// 🎮 DATA LOOP
+// DATA LOOP
 // =====================================================
 let currentWeather = null;
 let precipitationType = null;
@@ -384,7 +611,7 @@ async function updateData() {
     }
 
     const newPrecipitationType =
-        currentWeather.name === "SNÍH" || currentWeather.temp <= 0 ? "snow" :
+        isSnowWeather(currentWeather) ? "snow" :
         currentWeather.rain > 0.1 ? "rain" :
         "none";
 
@@ -398,6 +625,8 @@ async function updateData() {
         initRain();
     }
 
+    updateCloudState(currentWeather);
+    updateFogState(currentWeather);
     renderVisual(currentWeather);
 
     const debug = document.getElementById("debug");
@@ -413,14 +642,16 @@ RAIN: ${currentWeather.rain}
 CLOUD: ${currentWeather.cloud}
 WIND: ${currentWeather.wind}
 HOUR: ${currentWeather.hour ?? 12}
-LIGHT: ${daylight.toFixed(2)}`;
+LIGHT: ${daylight.toFixed(2)}
+CLD: ${cloudState.density.toFixed(2)}
+FOG: ${fogState.density.toFixed(2)}`;
     } else {
         debug.style.display = "none";
     }
 }
 
 // =====================================================
-// 🎮 CONTROLS
+// CONTROLS
 // =====================================================
 addEventListener("keydown", e => {
     if (MODE === "TEST") {
@@ -433,7 +664,7 @@ addEventListener("keydown", e => {
 });
 
 // =====================================================
-// 🚀 START
+// START
 // =====================================================
 setInterval(updateData, MODE === "LIVE" ? 60000 : 999999);
 updateData();
