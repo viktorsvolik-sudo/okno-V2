@@ -16,7 +16,6 @@ body {
     inset: 0;
 }
 
-/* SHADOWS */
 #shadows {
     position: fixed;
     inset: 0;
@@ -69,13 +68,6 @@ canvas {
 const MODE = "TEST";
 
 // =====================================================
-// DAYLIGHT SETTINGS
-// =====================================================
-const SUNRISE_HOUR = 6;
-const SUNSET_HOUR = 20;
-const TWILIGHT_LENGTH = 2;
-
-// =====================================================
 // TEST DATA
 // =====================================================
 const testStates = [
@@ -91,6 +83,7 @@ const testStates = [
 ];
 
 let testIndex = 0;
+let currentWeather = null;
 
 // =====================================================
 // HELPERS
@@ -105,7 +98,7 @@ const shadowsCanvas = document.getElementById("shadows");
 const shctx = shadowsCanvas.getContext("2d");
 
 let shadowBands = [];
-let shadowState = { density:0, wind:0, storm:0, daylight:1 };
+let shadowState = { density:0, wind:0, storm:0 };
 
 function resizeShadows(){
     shadowsCanvas.width = innerWidth;
@@ -138,10 +131,9 @@ function updateShadowState(w){
     shadowState.storm = w.name==="BOURE"?1:0;
 }
 
-function drawShadowsFrame(t){
+function drawShadowsFrame(){
     shctx.clearRect(0,0,innerWidth,innerHeight);
 
-    const time = t*0.001;
     const baseAlpha = 0.05 + shadowState.density*0.2;
 
     for(const b of shadowBands){
@@ -155,6 +147,7 @@ function drawShadowsFrame(t){
             b.x,b.y,50,
             b.x,b.y,b.w
         );
+
         g.addColorStop(0,`rgba(0,0,0,${alpha})`);
         g.addColorStop(1,"rgba(0,0,0,0)");
 
@@ -171,13 +164,24 @@ initShadows();
 requestAnimationFrame(drawShadowsFrame);
 
 // =====================================================
-// BASIC VISUAL (zbytek nechávám jak máš)
+// COLOR SYSTEM (FIXED)
 // =====================================================
-let currentWeather=null;
-
 function renderVisual(s){
-    const base = 255 - s.cloud*1.2;
-    document.body.style.background = `rgb(${base},${base},${base+10})`;
+
+    let base =
+        s.temp >= 30 ? [250,153,35] :
+        s.temp >= 20 ? [255,210,120] :
+        s.temp >= 10 ? [180,210,255] :
+        s.temp > 0 ? [160,190,255] :
+        [200,220,255];
+
+    const mix = (s.cloud / 100) * 0.6;
+
+    const r = Math.round(base[0] + (255 - base[0]) * mix);
+    const g = Math.round(base[1] + (255 - base[1]) * mix);
+    const b = Math.round(base[2] + (255 - base[2]) * mix);
+
+    document.body.style.background = `rgb(${r},${g},${b})`;
 }
 
 // =====================================================
@@ -185,8 +189,19 @@ function renderVisual(s){
 // =====================================================
 function updateData(){
     currentWeather = testStates[testIndex];
+
     renderVisual(currentWeather);
     updateShadowState(currentWeather);
+
+    // DEBUG
+    document.getElementById("debug").textContent =
+`${currentWeather.name}
+TEMP: ${currentWeather.temp}
+RAIN: ${currentWeather.rain}
+CLOUD: ${currentWeather.cloud}
+WIND: ${currentWeather.wind}
+HOUR: ${currentWeather.hour}
+SHADOW: ${shadowState.density.toFixed(2)}`;
 }
 
 addEventListener("keydown", e=>{
