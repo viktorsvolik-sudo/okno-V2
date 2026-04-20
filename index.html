@@ -76,15 +76,13 @@ const TWILIGHT_LENGTH = 2;
 const testStates = [
     { name:"VEDRO", temp:35, rain:0, cloud:5, wind:0, hour:15 },
     { name:"JASNO", temp:28, rain:0, cloud:10, wind:0.2, hour:9 },
+    { name:"POLOJASNO", temp:24, rain:0, cloud:35, wind:0.15, hour:16 },
     { name:"JASNA NOC", temp:12, rain:0, cloud:0, wind:0.1, hour:1 },
     { name:"OBLACNO", temp:16, rain:0, cloud:75, wind:-0.5, hour:18 },
     { name:"MLHA", temp:4, rain:0, cloud:98, wind:0, hour:5 },
     { name:"DEST", temp:14, rain:0.5, cloud:85, wind:0.8, hour:13 },
     { name:"BOURE", temp:19, rain:6, cloud:100, wind:1, hour:21 },
     { name:"SNIH", temp:-3, rain:0.7, cloud:100, wind:-0.3, hour:9 }
-    { name:"POLOJASNO", temp:24, rain:0, cloud:35, wind:0.15, hour:16 }
-
-    
 ];
 
 let testIndex = 0;
@@ -192,7 +190,7 @@ function applyLightToColor(rgb, daylight) {
 // VISUAL SYSTEM
 // =====================================================
 function isSnowWeather(s) {
-    return s.name === "SNIH" || s.name === "SNIH" || s.temp <= 0;
+    return s.name === "SNIH" || s.temp <= 0;
 }
 
 function isFogWeather(s) {
@@ -209,7 +207,7 @@ function renderVisual(s) {
     if (s.name === "BOURE") blur = 1;
     if (isSnow) blur = Math.max(blur, 0.8);
 
-    const hour = MODE === "LIVE"
+    const hour = MODE === "TEST"
         ? (s.hour ?? 12)
         : new Date().getHours() + (new Date().getMinutes() / 60);
 
